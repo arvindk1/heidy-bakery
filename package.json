@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "Offline Mac recipe costing, receipt OCR, and pricing app for Heidy's Bakery",
   "scripts": {
-    "test": "node HeidyBakery/Tests/model.test.cjs",
+    "test": "node HeidyBakery/Tests/model.test.cjs && node HeidyBakery/Tests/regression.test.cjs",
     "build": "./HeidyBakery/build.sh"
   },
   "keywords": [

@@ -4,15 +4,15 @@
 
 ---
 
-## Highlights
+## What it does
 
-- **100% Offline & Private**: Zero external servers, no subscriptions, no paid AI accounts, and no telemetry. All computations and OCR run locally on your Mac.
-- **Universal macOS Binary**: Runs natively on both Apple Silicon (M1/M2/M3/M4) and Intel Macs running macOS 13 (Ventura) or later.
-- **True Batch Costing**: Accounts for every ingredient, packaging item, sticker, and hour of baking labor. Handles unit conversions across mass, volume, and count.
-- **On-Device Receipt OCR**: Ingests receipt photos and PDFs using Apple's Vision framework and PDFKit. Automatically extracts line items, learns supplier descriptions, and tracks full purchase histories.
-- **Selling Price Immutability**: Fluctuating ingredient prices update *suggested* prices and trigger review alerts, but **never** silently overwrite your manual selling prices.
-- **Excel Independence**: Generates and parses standard OpenXML (`.xlsx`) workbooks with live calculating formulas without any third-party libraries.
-- **Data Protection & Undo**: Backed by SQLite in WAL mode with full durability, 30-step undo history, and complete `.heidybackup` archives bundling records with original receipt files.
+- Runs entirely offline on this Mac: no external servers, no subscriptions, no telemetry. All computation and receipt OCR happen locally.
+- Universal binary: works on Apple Silicon and Intel Macs running macOS 13+.
+- Costs every recipe batch from ingredients, packaging, and labor hours, with unit conversions across mass, volume, and count.
+- Scans receipt photos/PDFs on-device (Vision + PDFKit), extracts line items, and tracks purchase history per ingredient.
+- Suggested selling prices update when costs change; your own manual prices are never silently overwritten.
+- Exports and re-imports standard `.xlsx` workbooks with live formulas, so the data is never locked into the app.
+- SQLite storage in WAL mode with 30-step undo and full `.heidybackup` archives.
 
 ---
 
@@ -66,7 +66,6 @@ Comprehensive technical, functional, and strategic documentation is organized in
 | [**Complete User Manual**](docs/USER_MANUAL.md) | Comprehensive step-by-step guide for bakery operators covering all 5 tabs and common workflows. |
 | [**Receipt Capture & Verification Pipeline**](docs/RECEIPT_WORKFLOW.md) | Detailed technical breakdown of the iOS Shortcut, iCloud sync, Vision OCR heuristics, and audit rules. |
 | [**Receipt Quick Guide**](docs/RECEIPT_QUICK_GUIDE.md) | A clean, printable 1-page cheat sheet for the daily 4-step receipt routine. |
-| [**Feasibility Study & Strategic Roadmap**](docs/FEASIBILITY_AND_ROADMAP.md) | 3-phase roadmap: Phase 1 (Costing Foundation), Phase 2 (Square POS, farmers markets, CPA pack), Phase 3 (6-month seasonal planner). |
 | [**Data Schema & Persistence Contracts**](docs/DATA_SCHEMA.md) | Formal JSON schemas (State v1), `.heidybackup` format, SQLite tables, and Excel worksheet specifications. |
 | [**Developer & Contributor Guide**](docs/DEVELOPER_GUIDE.md) | Environment setup, compilation commands, test suites, CLI inspection flags, and release packaging. |
 
@@ -85,7 +84,6 @@ heidy/
 │   ├── USER_MANUAL.md           # End-user manual
 │   ├── RECEIPT_WORKFLOW.md      # Receipt pipeline deep-dive
 │   ├── RECEIPT_QUICK_GUIDE.md   # Printable quick reference
-│   ├── FEASIBILITY_AND_ROADMAP.md # Strategic roadmap & tax considerations
 │   ├── DATA_SCHEMA.md           # Formal data and storage schemas
 │   └── DEVELOPER_GUIDE.md       # Developer setup and compilation guide
 ├── HeidyBakery/

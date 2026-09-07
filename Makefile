@@ -1,4 +1,4 @@
-.PHONY: all build test selftest pdf clean run zip seed
+.PHONY: all build test selftest clean run zip seed
 
 SEED := HeidyBakery/Resources/seed.json
 
@@ -8,18 +8,16 @@ seed:
 		echo "No private seed.json found - using synthetic example data."; \
 	fi
 
-all: test selftest pdf
+all: test selftest
 
 test: seed
 	node HeidyBakery/Tests/model.test.cjs
+	node HeidyBakery/Tests/regression.test.cjs
 
 selftest: seed
 	@mkdir -p test_data
 	@HEIDY_DATA_DIR="$(shell pwd)/test_data" "./HeidyBakery/Heidy Bakery.app/Contents/MacOS/HeidyBakery" --self-test
 	@rm -rf test_data
-
-pdf:
-	@/opt/homebrew/bin/python3.12 scripts/generate_guide_pdf.py
 
 build: seed
 	./HeidyBakery/build.sh
