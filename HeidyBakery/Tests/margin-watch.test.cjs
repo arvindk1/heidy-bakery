@@ -294,4 +294,30 @@ function baseState() {
   }
 }
 
-console.log('All Margin Watch tests (T1-T8) passed successfully!');
+// -----------------------------------------------------------------------------
+// Edge case: Undated history entry coexisting with dated entry
+// -----------------------------------------------------------------------------
+{
+  const s = baseState();
+  s.ingredients = [{
+    id: 'flour-undated',
+    name: 'Flour With Legacy Record',
+    price: 20,
+    size: 1,
+    unit: 'kg',
+    history: [
+      { date: '', price: 5, size: 1, unit: 'kg', note: 'Legacy unconfirmed row' },
+      { date: '2024-01-01', price: 12, size: 1, unit: 'kg' },
+      { date: '2026-01-01', price: 20, size: 1, unit: 'kg' }
+    ]
+  }];
+
+  const res = M.marginWatch(s);
+  assert.equal(res.ingredients.length, 1, 'Should include ingredient with dated baseline');
+  const item = res.ingredients[0];
+  assert.equal(item.then, 12, 'Baseline "then" must be the oldest dated entry (12), not the undated entry (5)');
+  assert.equal(item.oldestDate, '2024-01-01', 'Oldest date must match the dated entry');
+  assert.ok(Math.abs(item.deltaPercent - (100 * (20 / 12 - 1))) < 1e-9, 'Delta percent calculated against dated baseline');
+}
+
+console.log('All Margin Watch tests passed successfully!');

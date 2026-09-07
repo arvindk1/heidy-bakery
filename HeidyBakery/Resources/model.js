@@ -174,6 +174,7 @@
 
       const validHistory = [];
       for (const h of i.history) {
+        if (!validDate(h.date)) continue;
         const u = unitCost(h);
         if (u === null) continue;
         const f = factor(i.unit, h.unit);
@@ -185,11 +186,7 @@
       }
       if (validHistory.length === 0) continue;
 
-      validHistory.sort((a, b) => {
-        const da = a.entry.date || '';
-        const db = b.entry.date || '';
-        return da.localeCompare(db);
-      });
+      validHistory.sort((a, b) => a.entry.date.localeCompare(b.entry.date));
 
       const then = validHistory[0].cost;
       if (!positive(then)) continue;
