@@ -1,92 +1,95 @@
 # Handoff: App Refresh (Visual + Navigation) + Brand Assets
 
-Status: Plan reviewed, brand assets prepared. No app code changed. This is a
-handoff for Codex to plan and implement.
+Status: **Implemented and pulled.** Codex's own build of the refresh plan is
+now in this tree (pulled from Codex's output directory into
+`HeidyBakery/`), all four test suites pass (`model`, `regression`,
+`margin-watch`, `refresh-contrast`), and the user has manually verified the
+running app works. One concrete gap remains — the app icon isn't wired in
+yet (§4).
 
-Full plan: [`APP-REFRESH-PLAN.md`](./APP-REFRESH-PLAN.md) (in this directory).
+Full plan: [`APP-REFRESH-PLAN.md`](./APP-REFRESH-PLAN.md). Verification
+notes from an earlier, separately-built implementation of this same plan:
+[`docs/REFRESH-VERIFICATION.md`](./docs/REFRESH-VERIFICATION.md) — read the
+note at the top of that file; some specifics there (navigation order, icon
+wiring) don't match what Codex actually shipped.
 
 ---
 
-## 1. Plan feedback
+## 1. Plan feedback (from before implementation — still relevant)
 
-The plan is well-scoped and safe to build from as-is. Two things worth
-resolving before or during implementation, not blockers:
+- **Contrast targets were qualitative** in the original plan. Codex's
+  shipped palette was checked quantitatively against WCAG AA (4.5:1 body
+  text, 3:1 UI components/borders) in both light and dark mode via
+  `HeidyBakery/Tests/refresh-contrast.test.cjs` — 20 pairings, all pass.
+- **Window-size breakpoints**: Codex's actual implementation uses 760px,
+  1,100px, and 1,440px thresholds (per an earlier verification pass's
+  layout matrix — worth confirming these are the same thresholds Codex's
+  current CSS uses if that matters later).
 
-- **Contrast targets are qualitative** ("sufficient contrast," "readable
-  contrast"). Use WCAG AA quantitatively: 4.5:1 for body text, 3:1 for large
-  text / UI components / focus indicators, in both light and dark mode. Check
-  this for every new color pairing introduced, not just the ones that look
-  borderline.
-- **Window-size breakpoints are unspecified** ("narrower window sizes",
-  "collapse when content needs more width"). Pick actual pixel thresholds
-  before writing layout CSS — this is a real resizable WKWebView window, not
-  a responsive marketing site with unlimited breakpoints to choose from.
+## 2. What Codex actually shipped vs. the plan
 
-Everything else in the plan (functionality-protection invariants, the
-six-destination navigation order, the explicit refusal to invent an "overall
-bakery margin" metric, the incremental delivery sequence) is sound and
-should be followed as written.
+- **Navigation order differs from the plan.** The plan specified Price
+  list → Recipes → Ingredients → Receipts → Margin Watch → Settings.
+  Codex's shipped `index.html` orders it Price list → **Margin Watch** →
+  Receipts → Ingredients → Recipes → Settings. Functionally complete either
+  way (all six destinations present, Settings last), but if the plan's
+  order was intentional, this needs a follow-up. Not fixed here — flagging
+  it since it's the one clear deviation.
+- **`Resources/model.js` is unchanged** — confirmed by diff. The costing
+  engine, invariants, and Margin Watch calculations are untouched by the
+  refresh, as required.
+- Cross-screen links (`data-open-recipe`, `data-review-item`) are intact.
 
-## 2. Brand assets — what's usable and where
+## 3. Confirmed brand palette (unchanged from original handoff)
 
-All files below are at the root of `~/devl/heidy` (not yet moved into
-`HeidyBakery/`).
-
-| File | Status | Use it for |
-|---|---|---|
-| `AppIcon.icns` | **Fixed — usable now** | Wire into `Assets.xcassets/AppIcon.appiconset` / `Info.plist`. See note below — the original version had a real defect that's now corrected in this file. |
-| `AppIcon.iconset/` (10 PNGs, 16px–1024px) | Usable now | Same content as the `.icns`, unpacked, in case the build needs individual sizes. |
-| `AppIcon-transparent.png` (1024×1024) | Usable now | Master source image — properly alpha-masked, transparent outside the rounded-square shape. Use this as the source of truth if the iconset needs regenerating later. |
-| `AppIcon.png` (1024×1024) | **Do not use as-is** | Flat opaque JPEG-derived PNG, no transparency — same defect as the old `.icns`. Superseded by `AppIcon-transparent.png`. Safe to delete once the new files are confirmed working. |
-| `AppLogo-DockIcon.jpg` | Reference only | Same artwork as the icon; JPEG has no alpha channel so it can't be used as the actual app icon. Useful as a visual reference for the 3D style if you want to extend it to other assets. |
-| `AppLogo-BrandMockup.jpg` | Marketing use only, not the app icon | Includes the wordmark ("the little dot — tea & bakery") baked into the image. App icons should stay graphic-only per Apple HIG — text becomes unreadable at 16×16 and 32×32. Fine for a README banner or a splash/about screen if one gets added, not for `AppIcon.appiconset`. |
-| `IMG_1390.jpg` | Source reference | The original flat brand-mark photo the palette below was sampled from. Keep for reference; not used directly in the app. |
-| `build-icns.sh` | Tooling reference | One-line `iconutil` command to regenerate `AppIcon.icns` from `AppIcon.iconset/` if the source art changes later. Must be run in a real macOS Terminal — `iconutil` isn't available in a sandboxed shell. |
-
-**Note on the icon fix:** the original `AppIcon.png` and `AppIcon.icns` had a
-fully opaque background baked in (verified by direct pixel inspection —
-alpha channel absent or 255 at every corner), which would have rendered as a
-visible white/cream square block behind the icon in the Dock and Finder
-instead of a floating rounded shape. The current `AppIcon.icns` in this
-directory has been rebuilt with a proper alpha-masked rounded-square
-(squircle) shape and verified transparent at the corners. It's ready to
-wire in directly.
-
-## 3. Confirmed brand palette
-
-Sampled directly from pixel data in the flat source logo (`IMG_1390.jpg`),
-not the 3D-rendered icon — glossy shading in the rendered icon skews hues
-lighter/warmer under highlight, so it isn't a reliable palette source.
+Sampled directly from pixel data in the flat source logo (`IMG_1390.jpg`,
+now at `docs/brand-reference/IMG_1390.jpg`), not the 3D-rendered icon —
+glossy shading in the rendered icon skews hues lighter/warmer under
+highlight, so it isn't a reliable palette source.
 
 | Role | Hex | Notes |
 |---|---|---|
-| Deep caramel | `#A08050` | Dark downward-triangle mark; candidate for the plan's "restrained caramel action color" |
+| Deep caramel | `#A08050` | Dark downward-triangle mark |
 | Warm tan | `#A89068` | Middle triangle mark |
-| Olive / sage | `#B0B078` | The "D" mark; candidate for the plan's sparing olive/sage accent |
-| Pale sage dot | `#D8D8A8` | The small dot mark; too light for text/icon use at AA contrast on a light canvas — status-accent only, paired with text or an icon per the plan's own guidance |
-| Wordmark brown | `#908060` | Close to deep caramel but distinct; likely redundant with it in a UI palette — pick one as the primary accent rather than carrying both |
-| Warm porcelain canvas | `#FAF6EE` | Not sampled from the logo — matches the plan's own "warm porcelain canvas" description; verify against the plan author's intent before locking it in |
+| Olive / sage | `#B0B078` | The "D" mark |
+| Pale sage dot | `#D8D8A8` | Too light for text/icon use at AA contrast on a light canvas — status-accent only |
+| Wordmark brown | `#908060` | Close to deep caramel; likely redundant as a second accent |
+| Warm porcelain canvas | `#FAF6EE` | Not sampled from the logo — matches the plan's "warm porcelain canvas" description |
 
-Every functional color pairing built from this palette (text on porcelain,
-badges/status colors on their backgrounds, focus rings) needs its own AA
-contrast check per §1 above — none of these values are pre-verified against
-any specific background yet.
+Codex's shipped palette (`--paper`, `--wash`, `--ink`, `--brand`, `--bad`,
+`--green`, light and dark) is close in spirit to this table without using
+these exact hex values or variable names — both palettes pass AA
+independently; no reconciliation needed unless brand-hex-exactness matters.
 
-## 4. What to do with this
+## 4. Remaining gap: the app icon isn't wired in
 
-1. Read `APP-REFRESH-PLAN.md` in full — it's the actual scope document.
-2. Follow the plan's own delivery sequence (baseline → visual foundation →
-   screen layouts → navigation behavior → verification → handoff), starting
-   with inspecting the running app and recording baseline screenshots, per
-   plan §"Delivery sequence" step 1.
-3. Wire `AppIcon.icns` into the Xcode project's asset catalog and verify it
-   renders correctly (no white box) in both the Dock and Finder, at multiple
-   sizes, in both system appearances.
-4. Build the visual foundation (typography, spacing, the palette in §3 above
-   with contrast verified per §1) before touching individual screens.
-5. Run all three existing test suites (`model.test.cjs`, `regression.test.cjs`,
-   `margin-watch.test.cjs`) after every increment — visual changes must not
-   regress the costing invariants described in the plan's "Functionality
-   protection" section.
-6. Once done, clean up the unused asset files noted "Do not use" / "Reference
-   only" in §2 above so they don't linger as ambiguous artifacts in the repo.
+`HeidyBakery/Resources/AppIcon.icns` exists (corrected version, real
+alpha transparency — verified by direct pixel inspection, no opaque
+background) but:
+
+- `HeidyBakery/Info.plist` has **no `CFBundleIconFile` key**.
+- `HeidyBakery/build.sh` has **no icon-copying step** (`grep -i icon` on it
+  returns nothing).
+
+This app is a shell-built Cocoa bundle, not an Xcode project with an asset
+catalog — so wiring the icon in means: copy `AppIcon.icns` into
+`Contents/Resources/` during `build.sh`, and add `CFBundleIconFile` to
+`Info.plist` pointing at it. Until this is done, a fresh build will use the
+default generic app icon rather than the little dot mark.
+
+## 5. Brand asset locations (moved since the original handoff)
+
+| File | Status | Location now |
+|---|---|---|
+| `AppIcon.icns` | Usable now | `HeidyBakery/Resources/AppIcon.icns` (needs wiring per §4) |
+| `AppIcon-transparent.png`, `AppIcon.iconset/` | Usable now | `assets/brand/` |
+| `AppLogo-DockIcon.jpg`, `AppLogo-BrandMockup.jpg`, `IMG_1390.jpg` | Reference/marketing only, not the app icon | `docs/brand-reference/` |
+| `AppIcon.png` (opaque, no transparency) | Do not use | `docs/brand-reference/superseded/AppIcon-opaque-do-not-use.png` |
+| `build-icns.sh` | Tooling reference | Repo root |
+
+## 6. What's left to do
+
+1. Fix the icon wiring in §4 (`build.sh` + `Info.plist`).
+2. Decide on the navigation-order deviation in §2 — keep Codex's order or
+   correct it to match the plan.
+3. Re-run `make test` after any change — all four suites must stay green.

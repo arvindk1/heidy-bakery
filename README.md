@@ -1,4 +1,4 @@
-# Heidy's Bakery — macOS Costing, Receipt OCR & Pricing App
+# The Little Dot — macOS Costing, Receipt OCR & Pricing App
 
 > **A fast, sovereign, offline Mac application for boutique bakery recipe costing, receipt OCR scanning, and retail/wholesale price management.**
 
@@ -54,7 +54,7 @@ make build
 | **Recipes** | Recipe builder and cost breakdown: per-batch and per-piece ingredients, labor allowances, bulk overrides, and baking instructions. |
 | **Settings** | Global labor rate, retail/bulk markups, cost increase alert thresholds, 30-step undo, full backups, and Excel export/import. |
 
-> Margin Watch is implemented and tested in this repo; it is pending port into Codex's source tree (see `HANDOFF-MARGIN-WATCH.md`).
+> The visual and navigation refresh (warm porcelain palette, six labeled destinations, responsive layouts) is implemented, pulled from Codex's build, and passing all four test suites. `docs/REFRESH-VERIFICATION.md` documents an earlier, separately-built refresh pass with some different specifics (navigation order, app-icon wiring) than what's actually shipped now — read the note at the top of that file before relying on its details. `HANDOFF-APP-REFRESH.md` tracks what's still outstanding (the app icon isn't wired into `Info.plist`/`build.sh` yet). The application bundle filename remains `Heidy Bakery.app` for compatibility.
 
 ---
 

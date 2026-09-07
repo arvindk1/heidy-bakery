@@ -14,6 +14,7 @@ test: seed
 	node HeidyBakery/Tests/model.test.cjs
 	node HeidyBakery/Tests/regression.test.cjs
 	node HeidyBakery/Tests/margin-watch.test.cjs
+	node HeidyBakery/Tests/refresh-contrast.test.cjs
 
 selftest: seed
 	@mkdir -p test_data

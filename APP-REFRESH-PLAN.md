@@ -1,5 +1,5 @@
 # The Little Dot — App Refresh Plan
-Status: Proposed scope for review; implementation has not started.
+Status: Implemented. See [implementation and verification report](docs/REFRESH-VERIFICATION.md) for delivered scope, evidence, and verification limits.
 
 ## Goal
 Make the bakery's existing offline Mac app feel fresh, minimal, and easy to use while preserving its costing, pricing, receipt, and record-management functionality. Improve the current application without adding unnecessary visual effects or architectural weight.

@@ -19,28 +19,36 @@ heidy/
 ├── Makefile                     # Root developer build and test commands
 ├── package.json                 # npm scripts (npm test, npm run build)
 ├── README.md                    # Project overview & documentation index
+├── APP-REFRESH-PLAN.md          # Visual/navigation refresh scope document
+├── HANDOFF-APP-REFRESH.md       # Refresh handoff: feedback, assets, remaining gaps
+├── assets/brand/                # Usable brand assets (app icon source + iconset)
 ├── docs/                        # Comprehensive documentation
 │   ├── ARCHITECTURE.md          # Native Cocoa, WebKit bridge, SQLite engine
 │   ├── USER_MANUAL.md           # End-user manual for Heidy and operators
 │   ├── RECEIPT_WORKFLOW.md      # iPhone shortcut, iCloud sync, Vision OCR
 │   ├── RECEIPT_QUICK_GUIDE.md   # 1-page quick cheat sheet
 │   ├── DATA_SCHEMA.md           # JSON schemas, SQLite schema, Excel specs
-│   └── DEVELOPER_GUIDE.md       # This file
+│   ├── DEVELOPER_GUIDE.md       # This file
+│   ├── REFRESH-VERIFICATION.md  # Verification notes from an earlier refresh pass (see note in that file)
+│   └── brand-reference/         # Reference/marketing brand images, not build inputs
 ├── HeidyBakery/
 │   ├── build.sh                 # Multi-architecture compilation & packaging
 │   ├── Info.plist               # App bundle metadata
+│   ├── package.json             # npm scripts scoped to this directory
 │   ├── Source/
 │   │   └── Main.swift           # Native host, WebKit bridge, OCR & SQLite
-│   ├── Resources/               # WebKit bundled assets
+│   ├── Resources/                # WebKit bundled assets
 │   │   ├── index.html           # Single-page interface shell
-│   │   ├── style.css            # Responsive layout & theme styles
+│   │   ├── style.css            # Responsive layout & theme styles (refreshed palette)
 │   │   ├── model.js             # Pure domain costing & unit conversion engine
 │   │   ├── app.js               # UI controller, event handlers, bridge calls
+│   │   ├── AppIcon.icns          # App icon (not yet wired into Info.plist/build.sh - see HANDOFF-APP-REFRESH.md)
 │   │   └── seed.json            # Initial migration records (11 recipes, 197 items)
 │   ├── Tests/
 │   │   ├── model.test.cjs       # Node.js domain arithmetic test suite
 │   │   ├── regression.test.cjs  # Malformed data, dates/DST, atomic approvals, rollback
-│   │   └── margin-watch.test.cjs # Margin Watch ranked-view calculation tests
+│   │   ├── margin-watch.test.cjs # Margin Watch ranked-view calculation tests
+│   │   └── refresh-contrast.test.cjs # WCAG AA contrast check on the shipped palette
 │   ├── SPECIFICATION.md         # Initial technical requirements
 │   ├── START HERE.md            # Onboarding & first-install notes
 │   ├── VALIDATION.md            # September 6, 2026 validation report

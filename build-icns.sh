@@ -1,6 +1,4 @@
 #!/bin/bash
-# Run this in a real macOS Terminal (not the sandbox) from the folder
-# containing AppIcon.iconset/
-set -e
-iconutil -c icns AppIcon.iconset -o AppIcon.icns
-echo "Built AppIcon.icns"
+set -euo pipefail
+PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
+iconutil -c icns "$PROJECT_DIR/assets/brand/AppIcon.iconset" -o "$PROJECT_DIR/HeidyBakery/Resources/AppIcon.icns"
