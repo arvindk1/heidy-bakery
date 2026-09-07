@@ -58,10 +58,38 @@ Under **Settings → Receipt folder**:
 
 ---
 
-## 4. The 5 Core Tabs
+## 4. Transitioning From Your Spreadsheets
 
-The application is organized into five tabs across the top:
-`Price list` | `Receipts` | `Ingredients` | `Recipes` | `Settings`
+This section is for anyone moving off `Cloud Chiffon Series.xlsx` and `cost master.xlsx` and into this app. It explains what carries over automatically, what looks different, and why a few numbers will not match your old spreadsheets exactly.
+
+### What stays the same
+- **Your original Excel files are never touched.** Importing only *reads* them once, at Step 1 of setup (see §3). They remain on your Mac exactly as they were, untouched, for as long as you want to keep them as a reference or backup.
+- The recipes, ingredient list, labour hours, and labour-effort choices (Easy/Low/Medium/High/Extreme, or a custom hour count) all carry over as entered in the spreadsheets.
+- Nothing about how you price — your markup percentages, retail and bulk prices — is decided for you. Markup fields start blank on first import specifically so the app never assumes a pricing preference you haven't confirmed yourself.
+
+### What's different, and why the numbers may not match exactly
+The app recalculates every recipe from scratch using the same underlying ingredient costs, rather than trusting the spreadsheet's own formulas. A few of your old formulas had quiet bugs that under- or over-counted cost, so some recipes will show a **corrected** cost per piece that differs slightly from what the spreadsheet displayed:
+- **Vanilla**: the spreadsheet's own selling-price summary was broken and is not used by the app. The corrected cost per piece (roughly \$2.53, including egg yolks and stickers that the old formulas dropped) is what the app now shows.
+- **Recipes with packaging or egg-yolk lines**: some original batch-total formulas silently omitted certain rows (such as stickers and yolks) from the batch cost. The app includes every ingredient and packaging row, so totals for these recipes may read a little higher than the old spreadsheet total — this is a correction, not a data-entry mistake.
+- **Chestnut**: one ingredient on this recipe was never fully identified in the source data. The app deliberately blocks Chestnut's cost and selling-price suggestions (rather than silently guessing or masking the gap the way a spreadsheet formula might) until that ingredient is properly matched to a priced item.
+
+None of this changes your actual selling prices — those are yours to set either way. It only means the *cost* side of a handful of recipes is now more accurate than the spreadsheet version was.
+
+### Suggested first week
+1. Complete the three setup steps in §3 (import, settings, receipt folder) if you haven't already.
+2. Open the **Price list** tab and sort by the **Review** column. Fix any `Missing costs` items first — these are usually ingredients that need a price or package size entered on the **Ingredients** tab.
+3. Spot-check two or three recipes you know well against your memory of their old spreadsheet cost. Expect Vanilla and any recipe with stickers/yolks to read a bit higher than before, for the reasons above — that is expected and correct.
+4. Resolve **Chestnut** by identifying and pricing its missing ingredient on the **Ingredients** tab, once you know what it should be.
+5. Enter your retail and bulk selling prices on the **Price list** tab for anything still blank.
+6. Process a few real receipts through the **Receipts** tab so future purchases start updating costs automatically.
+7. Check the **Margin Watch** tab (see §5) once you have a week or two of receipts in — it will start showing which ingredients are trending in price.
+
+---
+
+## 5. The 6 Core Tabs
+
+The application is organized into six tabs across the top:
+`Price list` | `Margin Watch` | `Receipts` | `Ingredients` | `Recipes` | `Settings`
 
 ---
 
@@ -77,18 +105,32 @@ The **Price list** gives you an instant overview of all your products, their act
   $$\text{Margin} = \frac{\text{Your Price} - \text{Cost}}{\text{Your Price}} \times 100$$
 - **Bulk suggested & Your bulk**: Suggested and actual wholesale prices per piece.
 - **Bulk margin**: Profit margin at your bulk price.
-- **Review column**: Displays badges such as:
-  - `Ready`: All ingredient costs are up-to-date and complete.
-  - `Missing costs`: One or more ingredients in the recipe lack a purchase price.
-  - `Cost up X%`: Recent receipt updates caused the cost to increase by $X\%$.
-  - `Check purchase dates`: An ingredient price hasn't been updated in over a year.
+- **Review column**: Displays one badge per recipe, in priority order:
+  - `Missing costs`: One or more ingredients in the recipe lack a purchase price or package size. Hover for a tooltip; open the recipe to fix it.
+  - `Missing bulk costs`: The recipe has a bulk price set but one or more bulk-specific cost inputs (bulk packaging or bulk labor overrides) are incomplete.
+  - `Cost up X%`: The recipe's cost per piece has risen by at least your configured alert threshold since it was last acknowledged with **Mark cost change as reviewed**. Hover for the exact percentage.
+  - A named ingredient (e.g. "Salt 3 yrs ago"): A clickable link naming the specific ingredient that triggered a lower-priority warning, such as a stale purchase date. Clicking it jumps straight to that ingredient. Hover for the full detail message.
+  - `Ready`: All ingredient costs and purchase prices are up-to-date and complete — nothing needs attention.
 
 > [!TIP]
 > Filter the list using the dropdown at the top: select **Needs review** to see which recipes require attention, or **Missing selling prices** to see unpriced items.
 
 ---
 
-### Tab 2: Receipts
+### Tab 2: Margin Watch
+
+The **Margin Watch** tab is an early-warning view that surfaces trends the Price List's per-recipe badges don't show on their own — it never changes any stored price or baseline, it only highlights what to look at next.
+
+- **Ingredient price trend**: Ranks ingredients by how much their cost per unit has moved since the oldest dated, valid purchase record on file, highest increase first. This can flag a supplier creeping up in price well before any single recipe crosses your `Cost up X%` alert threshold.
+- **Recipe margin drift**: Ranks recipes with a saved cost baseline and a retail price by how many dollars of margin per piece they have lost since that baseline was set, highest loss first.
+- Click any ingredient or recipe in the list to jump directly to it.
+
+> [!TIP]
+> Use this tab periodically (weekly or monthly) as a check-in, even for recipes that haven't triggered a `Cost up X%` badge yet — slow, steady price creep on a key ingredient can erode margin long before it crosses the alert threshold on any one recipe.
+
+---
+
+### Tab 3: Receipts
 
 The **Receipts** tab is where you process receipts photographed on your phone.
 
@@ -116,7 +158,7 @@ The **Receipts** tab is where you process receipts photographed on your phone.
 
 ---
 
-### Tab 3: Ingredients
+### Tab 4: Ingredients
 
 The **Ingredients** tab manages your master catalog of raw ingredients and packaging supplies.
 
@@ -133,7 +175,7 @@ The **Ingredients** tab manages your master catalog of raw ingredients and packa
 
 ---
 
-### Tab 4: Recipes
+### Tab 5: Recipes
 
 The **Recipes** tab allows you to inspect, modify, and build recipes.
 
@@ -154,7 +196,7 @@ When you select a recipe, you see:
 
 ---
 
-### Tab 5: Settings
+### Tab 6: Settings
 
 The **Settings** tab contains global configuration and safety tools:
 
@@ -174,7 +216,7 @@ The **Settings** tab contains global configuration and safety tools:
 
 ---
 
-## 5. Frequently Asked Questions
+## 6. Frequently Asked Questions
 
 ### Can I accidentally delete or overwrite my selling prices?
 **No.** Your retail and bulk selling prices are completely under your control. Approving new receipt prices or updating ingredient costs will only change the *suggested* prices. Your prices remain unchanged until you edit them directly.

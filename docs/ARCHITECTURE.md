@@ -148,6 +148,14 @@ Manual selling prices entered by the user **never change automatically** when re
 - When an ingredient cost increases, a review alert is flagged if the increase exceeds `settings.alertPercent`.
 - A `costBaseline` is recorded. When the user acknowledges the change via **Mark cost change as reviewed**, the alert clears while preserving the user's manual retail and bulk selling prices.
 
+### 4.4 Margin Watch (`marginWatch(state, now)`)
+A read-only, on-demand report (no state mutation) surfaced in the **Margin Watch** tab. It computes two independently-sorted rankings:
+
+1. **Ingredient price trend** — for each ingredient with at least two dated, valid history entries, compares the current unit cost against the cost at the oldest valid dated entry (invalid or undated entries are excluded via the existing `validDate()` guard so they cannot anchor a trend calculation). Cross-unit comparisons are normalized through the same `unitCost()`/`factor()` machinery used elsewhere in the model; entries whose units fall in different dimensions (e.g. mass vs. volume) are skipped rather than guessed. Results are ranked by percentage change, highest increase first.
+2. **Recipe margin drift** — for each recipe with both a `costBaseline` and a `retail` price set, compares the margin implied by the current cost (via `calculate()`) against the margin implied by the baseline cost, ranked by dollars-of-margin lost per piece, highest loss first.
+
+This gives an early-warning view of which ingredients are trending expensive and which recipes are quietly losing margin, without altering any stored baseline or selling price — acknowledging the drift still requires the existing **Mark cost change as reviewed** action described in §4.3.
+
 ---
 
 ## 5. Receipt Ingestion & On-Device OCR

@@ -43,15 +43,18 @@ make build
 
 ---
 
-## The 5 Core Tabs
+## The 6 Core Tabs
 
 | Tab | Purpose |
 |---|---|
 | **Price list** | Master overview of all recipes, yields, calculated costs per piece, suggested prices, manual selling prices, and profit margins. |
+| **Margin Watch** | Proactive ranked view of which ingredients are rising fastest in price and which recipes are losing the most margin as a result. |
 | **Receipts** | Scans iPhone receipt photos/PDFs from iCloud Drive, runs on-device OCR, matches candidate items to ingredients, and updates purchase histories. |
 | **Ingredients** | Master catalog of ingredients and packaging items, package sizes, purchase prices, suppliers, and historical price charts. |
 | **Recipes** | Recipe builder and cost breakdown: per-batch and per-piece ingredients, labor allowances, bulk overrides, and baking instructions. |
 | **Settings** | Global labor rate, retail/bulk markups, cost increase alert thresholds, 30-step undo, full backups, and Excel export/import. |
+
+> Margin Watch is implemented and tested in this repo; it is pending port into Codex's source tree (see `HANDOFF-MARGIN-WATCH.md`).
 
 ---
 
@@ -61,7 +64,6 @@ Comprehensive technical, functional, and strategic documentation is organized in
 
 | Document | Description |
 |---|---|
-| [**Visual User Guide & Troubleshooting Manual (PDF)**](file:///Users/arvindk/devl/heidy/Heidy%20Bakery%20-%20Complete%20User%20Guide%20%26%20Troubleshooting%20Manual.pdf) | **8-page printable PDF manual** featuring vector UI screen walkthroughs and step-by-step solutions for every error. |
 | [**Architecture & System Design**](docs/ARCHITECTURE.md) | Native Cocoa host, WebKit JavaScript bridge, SQLite WAL engine, Vision OCR pipeline, and OOXML Excel writer. |
 | [**Complete User Manual**](docs/USER_MANUAL.md) | Comprehensive step-by-step guide for bakery operators covering all 5 tabs and common workflows. |
 | [**Receipt Capture & Verification Pipeline**](docs/RECEIPT_WORKFLOW.md) | Detailed technical breakdown of the iOS Shortcut, iCloud sync, Vision OCR heuristics, and audit rules. |
@@ -86,6 +88,9 @@ heidy/
 │   ├── RECEIPT_QUICK_GUIDE.md   # Printable quick reference
 │   ├── DATA_SCHEMA.md           # Formal data and storage schemas
 │   └── DEVELOPER_GUIDE.md       # Developer setup and compilation guide
+├── REMAINING.md                 # Open items tracked for Codex (was HANDOFF.md/HANDOFF-BUGS.md)
+├── FEATURE-MARGIN-WATCH.md      # Feature spec for the Margin Watch tab
+├── HANDOFF-MARGIN-WATCH.md      # Port instructions for absorbing Margin Watch into Codex's tree
 ├── HeidyBakery/
 │   ├── build.sh                 # Universal multi-architecture build script
 │   ├── Info.plist               # Application bundle metadata
@@ -98,7 +103,9 @@ heidy/
 │   │   ├── app.js               # UI controller and native bridge communication
 │   │   └── seed.json            # Seed data (11 recipes, 197 ingredients)
 │   ├── Tests/
-│   │   └── model.test.cjs       # Node.js domain test suite
+│   │   ├── model.test.cjs       # Node.js domain test suite (golden costs, validation)
+│   │   ├── regression.test.cjs  # Malformed data, DST/dates, atomic approvals, rollback
+│   │   └── margin-watch.test.cjs # Margin Watch calculation tests
 │   ├── SPECIFICATION.md         # Initial v0.1 specification
 │   ├── START HERE.md            # Onboarding & test release notes
 │   ├── VALIDATION.md            # Validation checklist and sign-off notes

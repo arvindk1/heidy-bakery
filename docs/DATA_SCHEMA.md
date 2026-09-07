@@ -45,15 +45,16 @@ interface Ingredient {
   receiptId?: string | null;// SHA-256 hash of receipt establishing this price
   notes?: string;           // Optional user notes or supplier SKU
   source?: string;          // Provenance ("Imported from spreadsheet", "Created in app")
+  freeConfirmed?: boolean;  // User confirmed this item is genuinely free (price 0, not just missing data)
   history: PurchaseEvent[]; // Audit log of past purchases
 }
 
 interface PurchaseEvent {
-  date: string;             // Purchase date (YYYY-MM-DD)
-  supplier: string;         // Retailer
+  date?: string | null;     // Purchase date (YYYY-MM-DD); optional/may be missing on older entries
+  supplier?: string | null; // Retailer; optional
   price: number | null;     // Price paid
   size: number | null;      // Package size
-  unit: string;             // Unit
+  unit?: string | null;     // Unit; optional
   receiptId?: string | null;// Reference to receipt record
   note?: string;            // Context ("Receipt approved", "Previous master purchase")
 }
@@ -67,6 +68,7 @@ interface Recipe {
   yield: number;            // Total pieces produced per batch (e.g. 48)
   unit: string;             // Selling unit (e.g. "piece", "box")
   laborHours: number;       // Hours of labor required per batch (e.g. 1.5)
+  laborEffort?: string;     // Optional qualitative effort label (e.g. "Easy", "Moderate", "Hard")
   otherCost: number;        // Additional batch cost in dollars (e.g. gas, parchment)
   retail: number | null;    // User-entered retail price per unit
   bulk: number | null;      // User-entered bulk/wholesale price per unit
@@ -197,12 +199,13 @@ The application exports and reads five standardized worksheets:
 | G | Unit | String | Unit abbreviation (`g`, `ml`, etc.) |
 | H | Updated date | String | `YYYY-MM-DD` text |
 | I | Cost per unit | Formula | `=IF(OR(E2="",F2="",F2<=0,G2=""),"",E2/F2)` |
+| J | Free confirmed | Boolean | User confirmation that a zero price is intentional, not missing data |
 
 ### Sheet 2: `Settings` (Editable Inputs)
 Key-value configuration table containing `laborRate`, `retailMarkup`, `bulkMarkup`, `alertPercent`, and `staleDays`.
 
 ### Sheet 3: `Recipes` (Editable Inputs)
-Metadata for each recipe: ID, Name, Yield, Yield unit, Labour hours, Your retail, Your bulk, Bulk minimum, Notes, Category, Other batch cost, Bulk packaging per piece, Bulk labour hours.
+Metadata for each recipe: ID, Name, Yield, Yield unit, Labour hours, Labour effort, Your retail, Your bulk, Bulk minimum, Notes, Category, Other batch cost, Bulk packaging per piece, Bulk labour hours.
 
 ### Sheet 4: `Lines` (Editable Inputs)
 Recipe line details: Line ID, Recipe ID, Ingredient ID, Quantity, Unit, Per piece ($1$ or $0$), Conversion factor, Name (lookup formula), Kind (lookup formula), Cost per source unit, Batch quantity formula, Batch cost formula.

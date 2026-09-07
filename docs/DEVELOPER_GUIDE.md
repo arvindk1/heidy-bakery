@@ -24,7 +24,6 @@ heidy/
 │   ├── USER_MANUAL.md           # End-user manual for Heidy and operators
 │   ├── RECEIPT_WORKFLOW.md      # iPhone shortcut, iCloud sync, Vision OCR
 │   ├── RECEIPT_QUICK_GUIDE.md   # 1-page quick cheat sheet
-│   ├── FEASIBILITY_AND_ROADMAP.md # Phase 1-3 roadmap & business modeling
 │   ├── DATA_SCHEMA.md           # JSON schemas, SQLite schema, Excel specs
 │   └── DEVELOPER_GUIDE.md       # This file
 ├── HeidyBakery/
@@ -39,7 +38,9 @@ heidy/
 │   │   ├── app.js               # UI controller, event handlers, bridge calls
 │   │   └── seed.json            # Initial migration records (11 recipes, 197 items)
 │   ├── Tests/
-│   │   └── model.test.cjs       # Node.js domain arithmetic test suite
+│   │   ├── model.test.cjs       # Node.js domain arithmetic test suite
+│   │   ├── regression.test.cjs  # Malformed data, dates/DST, atomic approvals, rollback
+│   │   └── margin-watch.test.cjs # Margin Watch ranked-view calculation tests
 │   ├── SPECIFICATION.md         # Initial technical requirements
 │   ├── START HERE.md            # Onboarding & first-install notes
 │   ├── VALIDATION.md            # September 6, 2026 validation report
@@ -84,8 +85,15 @@ make build
 
 ## 4. Testing & Verification
 
-### 4.1 Domain Model Tests (`Tests/model.test.cjs`)
-Runs unit tests for unit conversion, batch costing arithmetic, bulk overrides, receipts approval logic, and duplicate detection:
+### 4.1 Domain Model Tests
+`make test` (or `npm test`) runs the full suite in order:
+
+- `Tests/model.test.cjs` — unit conversion, batch costing arithmetic, bulk overrides,
+  receipt approval logic, duplicate detection, and all 11 golden recipe costs.
+- `Tests/regression.test.cjs` — malformed data handling, date/DST edge cases, atomic
+  approvals, import provenance, exact save snapshots, write-failure rollback.
+- `Tests/margin-watch.test.cjs` — Margin Watch ranked-view calculations (ingredient
+  price trend, recipe margin drift), once ported from `~/devl/heidy`.
 
 ```bash
 make test

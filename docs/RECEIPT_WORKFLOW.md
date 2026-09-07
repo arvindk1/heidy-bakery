@@ -48,7 +48,7 @@ Receipt capture uses a native Apple Shortcut on Heidy's iPhone:
 
 When Heidy clicks **Check receipt folder** in the Receipts tab:
 1. The app enumerates supported files in the configured folder:
-   - Extensions: `.jpg`, `.jpeg`, `.png`, `.heic`, `.pdf`, `.tiff`
+   - Extensions: `.jpg`, `.jpeg`, `.png`, `.heic`, `.heif`, `.pdf`, `.tif`, `.tiff`
 2. **File Size Limit**: Individual files must not exceed **40 MB**.
 3. **Cryptographic SHA-256 Hashing**:
    - Each file's raw bytes are hashed using Apple's `CryptoKit.SHA256`.
