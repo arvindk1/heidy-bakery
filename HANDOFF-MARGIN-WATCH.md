@@ -35,85 +35,56 @@ defensive fix needed (below). Specifically verified:
   classes — no new CSS needed.
 - `marginWatch()` is read-only — does not mutate `state`.
 
-## Defensive fix applied (included in commit)
+## Bug found in review — already fixed, nothing further needed
 
-**Where:** `model.js`, inside `marginWatch()`, the history-sorting step.
+I originally found that a history entry with no `date` sorted to the
+*front* of the chronological comparison (empty string sorts before any
+real date), so it could be picked as the "oldest" purchase regardless of
+when it actually happened — confirmed with a synthetic case that inflated
+a correct ~67% rise into a wrong 300%.
 
-*Status:* **Fixed & tested in `~/devl/heidy`** (test included in `Tests/margin-watch.test.cjs`).
-
-```js
-validHistory.sort((a, b) => {
-  const da = a.entry.date || '';
-  const db = b.entry.date || '';
-  return da.localeCompare(db);
-});
-```
-
-A history entry with no `date` sorts to the *front* (empty string sorts
-before any real date string), so it gets treated as the oldest purchase
-regardless of when it actually happened. I confirmed this produces wrong
-output: a synthetic case with a correctly-dated $12/kg entry and an undated
-$5 entry picked the $5 entry as "then", inflating the computed rise from a
-correct ~67% to a wrong 300%.
-
-**Current real-world impact: none yet.** I checked `seed.json` — 3 of 25
-history entries have no date, but none of them currently co-occur with a
-second unit-tagged entry on the same ingredient, so `marginWatch()` doesn't
-misfire on what ships today. It will misfire once Heidy has two or more
-receipt-approved purchases on an ingredient that also carries one of these
-undated legacy rows — which is a matter of time, not a hypothetical.
-
-**Fix:** exclude undated entries when building `validHistory` — an entry
-with no date can't be reliably placed in chronological order, so it
-shouldn't be eligible to anchor the "then" baseline at all:
-
-```js
-for (const h of i.history) {
-  const u = unitCost(h);
-  if (u === null) continue;
-  if (!h.date) continue;                 // <-- add this
-  const f = factor(i.unit, h.unit);
-  if (f === null) continue;
-  validHistory.push({ entry: h, cost: u * f });
-}
-```
-
-Add a regression test for it (not in the original T1–T8 set): an ingredient
-with one dated history entry and one undated history entry must use the
-dated one as `then`, not whichever sorts first as a string.
+That's already fixed and tested in `~/devl/heidy`: `marginWatch()` now
+filters out any history entry whose date doesn't pass the existing
+`validDate()` check before it's eligible to anchor the "then" baseline —
+stricter than a simple truthy check, since it also rejects a malformed
+date string, not just a missing one. A regression test for exactly this
+case (dated + undated entries on the same ingredient) is included in
+`Tests/margin-watch.test.cjs` and passes. Nothing further to do here —
+port it as-is.
 
 ## Files changed (all in `~/devl/heidy`, for you to port)
 
 - `HeidyBakery/Resources/model.js` — new `marginWatch(state, now)` function
-  (~75 lines), exported alongside the existing `calculate`/`validate`/etc.
-  exports. Full diff below.
+  (~80 lines, including the date-validation fix above), exported alongside
+  the existing `calculate`/`validate`/etc. exports.
 - `HeidyBakery/Resources/app.js` — new `marginWatchPage()` render function
   (~110 lines) wired into the existing tab-router object, plus a
   `'margin-watch': marginWatchPage` entry.
 - `HeidyBakery/Resources/index.html` — one new `<button data-tab="margin-watch">`
   in the nav bar.
-- `HeidyBakery/Tests/margin-watch.test.cjs` — new file, T1–T8 test suite
-  (apply the undated-history fix above and add the T9 test alongside it).
+- `HeidyBakery/Tests/margin-watch.test.cjs` — new file, full test suite
+  including the undated-history regression case, all passing.
 - `HeidyBakery/build.sh`, root `Makefile`, `package.json` — one line each,
   wiring `margin-watch.test.cjs` into the existing test/build commands
   alongside `model.test.cjs` and `regression.test.cjs`.
 
-Get the full diff directly:
+Get the full diff directly (spans two commits — the feature, then the
+date-validation fix bundled with this handoff doc):
 
 ```bash
 cd ~/devl/heidy
-git show 0bde6f3
+git show 0bde6f3   # Implement Margin Watch feature
+git show f348061   # date-validation fix + regression test
 ```
 
-(commit `0bde6f3`, "Implement Margin Watch feature", on branch `main`)
+(branch `main`)
 
 ## What "absorb" means here
 
 Port the same changes into your own tree at the path above — same function,
-same UI, same test file — applying the one fix described above while you're
-already touching this code. Once it's in your tree and passing your own test
-run, the normal one-way pull flow resumes: devl pulls from you again, not
-the other way around.
+same UI, same test file, fix already included. Once it's in your tree and
+passing your own test run, the normal one-way pull flow resumes: devl pulls
+from you again, not the other way around.
 
 ## Test plan
 
