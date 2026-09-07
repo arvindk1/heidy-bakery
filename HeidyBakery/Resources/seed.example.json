@@ -1,0 +1,274 @@
+{
+ "ingredients": [
+  {
+   "id": "ex-flour",
+   "name": "Example Flour",
+   "kind": "ingredient",
+   "supplier": "Example Wholesaler",
+   "price": 8,
+   "size": 2000,
+   "unit": "g",
+   "updated": "2026-08-01",
+   "history": [],
+   "notes": ""
+  },
+  {
+   "id": "ex-sugar",
+   "name": "Example Sugar",
+   "kind": "ingredient",
+   "supplier": "Example Wholesaler",
+   "price": 4,
+   "size": 1000,
+   "unit": "g",
+   "updated": "2026-08-01",
+   "history": [],
+   "notes": ""
+  },
+  {
+   "id": "ex-butter",
+   "name": "Example Butter",
+   "kind": "ingredient",
+   "supplier": "Example Grocer",
+   "price": 6.5,
+   "size": 454,
+   "unit": "g",
+   "updated": "2026-08-01",
+   "history": [],
+   "notes": ""
+  },
+  {
+   "id": "ex-egg",
+   "name": "Example Egg",
+   "kind": "ingredient",
+   "supplier": "Example Grocer",
+   "price": 4.8,
+   "size": 12,
+   "unit": "each",
+   "updated": "2026-08-01",
+   "history": [],
+   "notes": ""
+  },
+  {
+   "id": "ex-milk",
+   "name": "Example Milk",
+   "kind": "ingredient",
+   "supplier": "Example Grocer",
+   "price": 3.2,
+   "size": 1000,
+   "unit": "ml",
+   "updated": "2026-08-01",
+   "history": [],
+   "notes": ""
+  },
+  {
+   "id": "ex-salt",
+   "name": "Example Salt",
+   "kind": "ingredient",
+   "supplier": "Example Wholesaler",
+   "price": 2,
+   "size": 1000,
+   "unit": "g",
+   "updated": "2023-01-15",
+   "history": [],
+   "notes": ""
+  },
+  {
+   "id": "ex-mystery",
+   "name": "Example Unpriced Item",
+   "kind": "ingredient",
+   "supplier": "",
+   "price": null,
+   "size": null,
+   "unit": "g",
+   "updated": "",
+   "history": [],
+   "notes": ""
+  },
+  {
+   "id": "ex-box",
+   "name": "Example Box",
+   "kind": "packaging",
+   "supplier": "Example Packaging Co",
+   "price": 20,
+   "size": 25,
+   "unit": "each",
+   "updated": "2026-08-01",
+   "history": [],
+   "notes": ""
+  },
+  {
+   "id": "ex-label",
+   "name": "Example Label",
+   "kind": "packaging",
+   "supplier": "Example Packaging Co",
+   "price": 9,
+   "size": 500,
+   "unit": "each",
+   "updated": "2026-08-01",
+   "history": [],
+   "notes": ""
+  }
+ ],
+ "recipes": [
+  {
+   "id": "ex-r1",
+   "name": "Example Loaf",
+   "yield": 12,
+   "unit": "piece",
+   "laborHours": 1,
+   "laborEffort": "easy",
+   "otherCost": 0,
+   "retail": null,
+   "bulk": null,
+   "bulkMin": null,
+   "bulkPackaging": null,
+   "bulkLaborHours": null,
+   "notes": "",
+   "category": "Sample",
+   "lines": [
+    {
+     "id": "ex-l1",
+     "ingredientId": "ex-flour",
+     "quantity": 1000,
+     "unit": "g",
+     "perPiece": false
+    },
+    {
+     "id": "ex-l2",
+     "ingredientId": "ex-sugar",
+     "quantity": 200,
+     "unit": "g",
+     "perPiece": false
+    },
+    {
+     "id": "ex-l3",
+     "ingredientId": "ex-butter",
+     "quantity": 150,
+     "unit": "g",
+     "perPiece": false
+    },
+    {
+     "id": "ex-l4",
+     "ingredientId": "ex-egg",
+     "quantity": 4,
+     "unit": "each",
+     "perPiece": false
+    },
+    {
+     "id": "ex-l5",
+     "ingredientId": "ex-milk",
+     "quantity": 300,
+     "unit": "ml",
+     "perPiece": false
+    },
+    {
+     "id": "ex-l6",
+     "ingredientId": "ex-salt",
+     "quantity": 8,
+     "unit": "g",
+     "perPiece": false
+    },
+    {
+     "id": "ex-l7",
+     "ingredientId": "ex-box",
+     "quantity": 1,
+     "unit": "each",
+     "perPiece": true
+    },
+    {
+     "id": "ex-l8",
+     "ingredientId": "ex-label",
+     "quantity": 1,
+     "unit": "each",
+     "perPiece": true
+    }
+   ],
+   "source": "Synthetic example data — not real supplier pricing"
+  },
+  {
+   "id": "ex-r2",
+   "name": "Example Bulk Cake",
+   "yield": 4,
+   "unit": "piece",
+   "laborHours": 2,
+   "laborEffort": "Low",
+   "otherCost": 0,
+   "retail": null,
+   "bulk": null,
+   "bulkMin": 24,
+   "bulkPackaging": 0.35,
+   "bulkLaborHours": 1,
+   "notes": "",
+   "category": "Sample",
+   "lines": [
+    {
+     "id": "ex-l9",
+     "ingredientId": "ex-flour",
+     "quantity": 1,
+     "unit": "kg",
+     "perPiece": false
+    },
+    {
+     "id": "ex-l10",
+     "ingredientId": "ex-sugar",
+     "quantity": 300,
+     "unit": "g",
+     "perPiece": false
+    },
+    {
+     "id": "ex-l11",
+     "ingredientId": "ex-box",
+     "quantity": 1,
+     "unit": "each",
+     "perPiece": true
+    }
+   ],
+   "source": "Synthetic example data — not real supplier pricing"
+  },
+  {
+   "id": "ex-r3",
+   "name": "Example Incomplete",
+   "yield": 6,
+   "unit": "piece",
+   "laborHours": 1,
+   "laborEffort": "easy",
+   "otherCost": 0,
+   "retail": null,
+   "bulk": null,
+   "bulkMin": null,
+   "bulkPackaging": null,
+   "bulkLaborHours": null,
+   "notes": "",
+   "category": "Sample",
+   "lines": [
+    {
+     "id": "ex-l12",
+     "ingredientId": "ex-flour",
+     "quantity": 500,
+     "unit": "g",
+     "perPiece": false
+    },
+    {
+     "id": "ex-l13",
+     "ingredientId": "ex-mystery",
+     "quantity": 25,
+     "unit": "g",
+     "perPiece": false
+    }
+   ],
+   "source": "Synthetic example data — not real supplier pricing"
+  }
+ ],
+ "settings": {
+  "laborRate": 24,
+  "retailMarkup": null,
+  "bulkMarkup": null,
+  "alertPercent": 10,
+  "staleDays": 365
+ },
+ "notes": [
+  "Synthetic example data. Invented ingredients, suppliers and prices — not real bakery pricing.",
+  "Used so a fresh clone can build and run without the private seed.json.",
+  "Example Unpriced Item and Example Salt deliberately exercise the missing-cost and stale-price paths."
+ ]
+}

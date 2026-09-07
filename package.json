@@ -1,0 +1,20 @@
+{
+  "name": "heidy-bakery",
+  "version": "0.1.0",
+  "description": "Offline Mac recipe costing, receipt OCR, and pricing app for Heidy's Bakery",
+  "scripts": {
+    "test": "node HeidyBakery/Tests/model.test.cjs",
+    "build": "./HeidyBakery/build.sh"
+  },
+  "keywords": [
+    "bakery",
+    "costing",
+    "pricing",
+    "macos",
+    "ocr",
+    "recipes"
+  ],
+  "author": "Arvind & Heidy",
+  "license": "UNLICENSED",
+  "private": true
+}

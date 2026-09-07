@@ -1,0 +1,34 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# Xcode / Swift Build
+build/
+*.o
+*.dSYM/
+*.swiftdoc
+*.swiftmodule
+.build/
+
+# Local data & test directories
+test_data/
+*.tmp
+
+# Node
+node_modules/
+npm-debug.log*
+
+# Backups and SQLite local databases (when run outside default app support)
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+HeidyBakery/Heidy Bakery.app/
+Heidy Bakery Mac.zip
+_backup-v0.1.0/
+HeidyBakery/test_data/
+HeidyBakery/final_test_data/
+
+# Private bakery data — real suppliers and prices. Never commit.
+HeidyBakery/Resources/seed.json
