@@ -5,6 +5,7 @@
 <key>CFBundleIdentifier</key><string>com.heidybakery.local</string>
 <key>CFBundleName</key><string>Heidy Bakery</string>
 <key>CFBundleDisplayName</key><string>Heidy’s Bakery</string>
+<key>CFBundleIconFile</key><string>AppIcon.icns</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleShortVersionString</key><string>0.3.0</string>
 <key>CFBundleVersion</key><string>3</string>
