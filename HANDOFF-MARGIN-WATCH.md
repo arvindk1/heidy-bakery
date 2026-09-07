@@ -35,9 +35,11 @@ defensive fix needed (below). Specifically verified:
   classes — no new CSS needed.
 - `marginWatch()` is read-only — does not mutate `state`.
 
-## One bug to fix during the port (not a separate round trip)
+## Defensive fix applied (included in commit)
 
 **Where:** `model.js`, inside `marginWatch()`, the history-sorting step.
+
+*Status:* **Fixed & tested in `~/devl/heidy`** (test included in `Tests/margin-watch.test.cjs`).
 
 ```js
 validHistory.sort((a, b) => {
