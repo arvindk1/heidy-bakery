@@ -161,6 +161,7 @@ function render() {
   }
   ({
     prices: pricePage,
+    'margin-watch': marginWatchPage,
     recipes: recipePage,
     ingredients: ingredientPage,
     receipts: receiptPage,
@@ -281,6 +282,117 @@ function priceRows() {
         cell.classList.toggle('bad', value < 0);
       }
     } catch {}
+  });
+}
+function marginWatchPage() {
+  const watch = M.marginWatch(state);
+  const ingList = watch.ingredients;
+  const recList = watch.recipes;
+  const hasData = ingList.length > 0 || recList.length > 0;
+
+  $('#main').innerHTML = `
+    <div class="toolbar">
+      <div>
+        <h1>Margin Watch</h1>
+        <p class="sub">Proactive tracking of ingredient cost inflation and recipe margin erosion.</p>
+      </div>
+    </div>
+    ${!hasData ? `
+      <div class="pane">
+        <h3>No margin drift detected yet</h3>
+        <p class="sub">This dashboard proactively flags which ingredients are surging in price and which recipes are losing profit margin per piece.</p>
+        <p class="small">As you scan and approve new receipts, ingredient purchase history accumulates automatically. When an ingredient's price increases above its baseline, it will appear here ranked by percentage and dollar impact.</p>
+      </div>
+    ` : `
+      <div class="two">
+        <div class="pane">
+          <h3>Ingredients rising fastest (${ingList.length})</h3>
+          <p class="small sub">Ranked by percentage cost increase since first recorded purchase.</p>
+          ${ingList.length ? `
+            <div class="scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Ingredient</th>
+                    <th class="num">Old cost</th>
+                    <th class="num">Current cost</th>
+                    <th class="num">Change (%)</th>
+                    <th class="num">Change ($)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${ingList.map(item => {
+                    const i = item.ingredient;
+                    const deltaPct = item.deltaPercent;
+                    const isUp = deltaPct > 0;
+                    return `
+                      <tr>
+                        <td>
+                          <button class="link" data-review-item="${esc(i.id)}">${esc(i.name)}</button>
+                          <div class="small">${esc(i.supplier || 'No supplier')} · per ${esc(i.unit)}</div>
+                        </td>
+                        <td class="num">${money(item.then)}</td>
+                        <td class="num">${money(item.now)}</td>
+                        <td class="num ${isUp ? 'bad' : 'good'}">${isUp ? '+' : ''}${deltaPct.toFixed(1)}%</td>
+                        <td class="num ${isUp ? 'bad' : 'good'}">${isUp ? '+' : ''}${money(item.deltaDollarsPerUnit)}</td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+          ` : '<p class="small">No ingredients with price changes yet.</p>'}
+        </div>
+
+        <div class="pane">
+          <h3>Recipes losing margin (${recList.length})</h3>
+          <p class="small sub">Ranked by dollar profit lost per piece since last price review.</p>
+          ${recList.length ? `
+            <div class="scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Recipe</th>
+                    <th class="num">Retail price</th>
+                    <th class="num">Margin drift</th>
+                    <th class="num">Lost / piece</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${recList.map(item => {
+                    const r = item.recipe;
+                    const drop = item.marginDropPoints;
+                    const isEroding = drop > 0;
+                    return `
+                      <tr>
+                        <td>
+                          <button class="link" data-open-recipe="${esc(r.id)}">${esc(r.name)}</button>
+                          <div class="small">Cost: ${money(item.costBaseline)} → ${money(item.costNow)}</div>
+                        </td>
+                        <td class="num">${money(item.retail)}</td>
+                        <td class="num ${isEroding ? 'bad' : 'good'}">
+                          ${pct(item.marginBaseline)} → ${pct(item.marginNow)}
+                          <div class="small">${isEroding ? '-' : '+'}${Math.abs(drop).toFixed(1)} pts</div>
+                        </td>
+                        <td class="num ${item.dollarsPerPiece > 0 ? 'bad' : 'good'}">
+                          ${item.dollarsPerPiece > 0 ? '-' : '+'}${money(Math.abs(item.dollarsPerPiece))}
+                        </td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+          ` : '<p class="small">No recipes with unreviewed cost increases.</p>'}
+        </div>
+      </div>
+    `}
+  `;
+
+  $$('#main [data-review-item]').forEach(b => b.onclick = () => editIngredient(state.ingredients.find(i => i.id === b.dataset.reviewItem)));
+  $$('#main [data-open-recipe]').forEach(b => b.onclick = () => {
+    selectedRecipe = b.dataset.openRecipe;
+    tab('recipes');
   });
 }
 function recipePage() {

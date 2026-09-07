@@ -9,6 +9,7 @@ trap 'rm -rf "$BUILD_DIR"' EXIT
 mkdir -p "$STAGED_APP/Contents/MacOS" "$STAGED_APP/Contents/Resources"
 node "$PROJECT_DIR/Tests/model.test.cjs"
 node "$PROJECT_DIR/Tests/regression.test.cjs"
+node "$PROJECT_DIR/Tests/margin-watch.test.cjs"
 for ARCH in arm64 x86_64; do
   swiftc "$PROJECT_DIR/Source/Main.swift" -O -target "$ARCH-apple-macosx13.0" -module-cache-path "$BUILD_DIR/module-cache" -framework Cocoa -framework WebKit -framework Vision -framework PDFKit -framework JavaScriptCore -lsqlite3 -o "$BUILD_DIR/HeidyBakery-$ARCH"
 done

@@ -166,6 +166,80 @@
   function margin(cost, price) {
     return cost !== null && positive(price) ? 100 * (price - cost) / price : null;
   }
+  function marginWatch(state, now = new Date()) {
+    const ingredients = [];
+    for (const i of state?.ingredients || []) {
+      const nowCost = unitCost(i);
+      if (nowCost === null || !Array.isArray(i.history) || i.history.length < 2) continue;
+
+      const validHistory = [];
+      for (const h of i.history) {
+        const u = unitCost(h);
+        if (u === null) continue;
+        const f = factor(i.unit, h.unit);
+        if (f === null) continue;
+        validHistory.push({
+          entry: h,
+          cost: u * f
+        });
+      }
+      if (validHistory.length === 0) continue;
+
+      validHistory.sort((a, b) => {
+        const da = a.entry.date || '';
+        const db = b.entry.date || '';
+        return da.localeCompare(db);
+      });
+
+      const then = validHistory[0].cost;
+      if (!positive(then)) continue;
+
+      const deltaPercent = 100 * (nowCost / then - 1);
+      const deltaDollarsPerUnit = nowCost - then;
+
+      if (Math.abs(deltaPercent) < 1e-9) continue;
+
+      ingredients.push({
+        ingredient: i,
+        then,
+        now: nowCost,
+        deltaPercent,
+        deltaDollarsPerUnit,
+        oldestDate: validHistory[0].entry.date || null
+      });
+    }
+    ingredients.sort((a, b) => b.deltaPercent - a.deltaPercent);
+
+    const recipes = [];
+    for (const r of state?.recipes || []) {
+      if (r.costBaseline == null || !positive(r.retail)) continue;
+      const calc = calculate(state, r, now);
+      const costNow = calc.unit;
+      if (costNow === null) continue;
+
+      const marginNow = 100 * (r.retail - costNow) / r.retail;
+      const marginBaseline = 100 * (r.retail - r.costBaseline) / r.retail;
+      const marginDropPoints = marginBaseline - marginNow;
+      const dollarsPerPiece = costNow - r.costBaseline;
+
+      recipes.push({
+        recipe: r,
+        costBaseline: r.costBaseline,
+        costNow,
+        retail: r.retail,
+        marginBaseline,
+        marginNow,
+        marginDropPoints,
+        dollarsPerPiece
+      });
+    }
+    recipes.sort((a, b) => b.dollarsPerPiece - a.dollarsPerPiece);
+
+    return {
+      ingredients,
+      recipes
+    };
+  }
   function validate(s) {
     const object = v => v !== null && typeof v === 'object' && !Array.isArray(v);
     const text = v => typeof v === 'string',
@@ -377,6 +451,7 @@
     unitCost,
     calculate,
     margin,
+    marginWatch,
     validate,
     approveReceipt,
     workbook,
