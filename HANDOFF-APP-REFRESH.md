@@ -93,3 +93,54 @@ default generic app icon rather than the little dot mark.
 2. Decide on the navigation-order deviation in §2 — keep Codex's order or
    correct it to match the plan.
 3. Re-run `make test` after any change — all four suites must stay green.
+
+---
+
+## 7. Update — pulled newer Codex output (2026-09-08)
+
+Pulled `~/Documents/Codex/2026-09-07/files-pasted-by-the-user-here/outputs/HeidyBakery`
+into this tree (files changed: `Info.plist`, `Makefile`, `build.sh`,
+`Resources/app.js`, `Resources/index.html`, `Resources/style.css`,
+`Source/Main.swift`, `Tests/refresh-contrast.test.cjs`,
+`Tests/ui-regression.cjs`; added `Tests/excel-ui.test.cjs`). `model.js`,
+`seed.json`, and `AppIcon.icns` were byte-identical to what was already here,
+so untouched. A dated backup of the previously-pulled files was made at
+`_backup-pre-pull-<timestamp>/` before overwriting.
+
+Both open items from §6 are resolved in this pull:
+
+- **Icon wiring (§4) is done.** `Info.plist` now sets
+  `CFBundleIconFile` to `AppIcon` (no extension — correct for `.icns`), and
+  `build.sh`'s `cp -R "$PROJECT_DIR/Resources/." "$STAGED_APP/Contents/Resources/"`
+  copies `AppIcon.icns` into the bundle. Confirmed present in the rebuilt
+  `.app` at `Contents/Resources/AppIcon.icns`.
+- **Navigation order (§2) now matches the plan.** Tab order is
+  `prices, recipes, ingredients, receipts, margin-watch, settings` — the
+  order `ui-regression.cjs`'s `expectedTabs` now asserts.
+
+This pull also carries a second visual pass beyond the original refresh:
+full rebrand to "the little dot — tea & bakery" (window title, header,
+`<title>`, `CFBundleDisplayName`), nav icons, a collapsible nav
+(`#nav-toggle`), a cross-screen `#back-view` control with filter/scroll/focus
+restoration, an unsaved-settings-draft guard that survives navigation and
+save failure, a second entry point for Excel import (`Import from Excel` on
+the Recipes screen, calling the same `importExcel()`), and materially
+clearer Excel-import error text on both the JS side (`app.js`) and the
+native side (`Main.swift`: unreadable-file and unsupported-layout messages
+now say plainly that no records changed and where to get a valid template).
+
+**Verified in this Linux-VM bridge (JS-only, no native binary or browser):**
+`node Tests/model.test.cjs`, `regression.test.cjs`, `margin-watch.test.cjs`,
+and the rewritten `refresh-contrast.test.cjs` (now 44 pairings, covering the
+new `--muted`/`--control`/`--focus`/`--on-brand` tokens) — all pass.
+
+**Not verified here — needs the actual Mac:** `Tests/ui-regression.cjs` and
+the new `Tests/excel-ui.test.cjs` need a real Chrome (via Playwright) and,
+for `excel-ui.test.cjs`, the compiled `Heidy Bakery.app` binary to do native
+XLSX read/write — this Linux VM has neither (no Chrome install, and the
+compiled binary is a macOS Mach-O executable — `Exec format error` here).
+Same for `Tests/excel.test.py`, which recalculates exported workbooks via
+LibreOffice against the native binary. Run `bash build.sh` on the Mac
+itself (it runs all four `make test` suites plus the native `--self-test`,
+then codesigns and rebuilds `Heidy Bakery.app`) to get full native
+verification before treating this pull as fully proven.

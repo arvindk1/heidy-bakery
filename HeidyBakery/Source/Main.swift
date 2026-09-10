@@ -29,12 +29,12 @@ func validatedState(_ object: Any) throws -> [String: Any] {
     try String(contentsOf: resources.appendingPathComponent("model.js"), encoding: .utf8))
   guard context.exception == nil,
     let validate = context.objectForKeyedSubscript("HeidyModel")?.objectForKeyedSubscript(
-      "validate")
+      "normalizeState")
   else { throw failure("The app's validation resource could not load.") }
   context.exception = nil
-  _ = validate.call(withArguments: [object])
+  let normalized = validate.call(withArguments: [object])
   if let error = context.exception { throw failure(error.toString() ?? "Invalid bakery data.") }
-  guard let state = object as? [String: Any] else { throw failure("Invalid bakery data.") }
+  guard let state = normalized?.toDictionary() as? [String: Any] else { throw failure("Invalid bakery data.") }
   return state
 }
 func emptyState() -> [String: Any] {
@@ -438,7 +438,10 @@ final class WorkbookXML: NSObject, XMLParserDelegate {
 func readWorkbook(_ file: URL) throws -> [String: Any] {
   let size = (try file.resourceValues(forKeys: [.fileSizeKey])).fileSize ?? 0
   guard size < 20_000_000 else { throw failure("Choose a workbook smaller than 20 MB.") }
-  func entry(_ name: String) throws -> Data { try run("/usr/bin/unzip", ["-p", file.path, name]) }
+  func entry(_ name: String) throws -> Data {
+    do { return try run("/usr/bin/unzip", ["-p", file.path, name]) }
+    catch { throw failure("This file could not be read as an Excel workbook (.xlsx). It may be damaged or not an Excel file. No records were changed.") }
+  }
   let wb = try WorkbookXML.read(entry("xl/workbook.xml"))
   let rels = try WorkbookXML.read(entry("xl/_rels/workbook.xml.rels"))
   let shared = (try? WorkbookXML.read(entry("xl/sharedStrings.xml")).strings) ?? []
@@ -447,7 +450,7 @@ func readWorkbook(_ file: URL) throws -> [String: Any] {
     guard let id = wb.sheets[name], let target = rels.rels[id], !target.contains(".."),
       !target.contains("\\"),
       target.rangeOfCharacter(from: CharacterSet(charactersIn: "*?[]")) == nil
-    else { throw failure("Use an Excel workbook exported by Heidy Bakery. Missing sheet: \(name)") }
+    else { throw failure("This workbook uses an unsupported layout. Import accepts the app’s exported Excel template, not separate recipe sheets. Export a template from Settings → Excel import and export, then enter your recipes in it. Required sheet not found: \(name). No records were changed.") }
     let path = target.hasPrefix("/") ? String(target.dropFirst()) : "xl/" + target
     result[name] = try WorkbookXML.read(entry(path), shared: shared).rows
   }
@@ -470,6 +473,7 @@ final class ReceiptScanner {
     var seen = known
     var duplicates = 0
     var pending = 0
+    var pendingFiles: [String] = []
     for original in urls.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) {
       var url = original
       do {
@@ -480,6 +484,7 @@ final class ReceiptScanner {
           guard Self.extensions.contains(url.pathExtension.lowercased()) else { continue }
           try fm.startDownloadingUbiquitousItem(at: url)
           pending += 1
+          pendingFiles.append(original.lastPathComponent)
           continue
         }
         guard Self.extensions.contains(url.pathExtension.lowercased()) else { continue }
@@ -490,6 +495,7 @@ final class ReceiptScanner {
         if values.isUbiquitousItem == true && values.ubiquitousItemDownloadingStatus != .current {
           try fm.startDownloadingUbiquitousItem(at: url)
           pending += 1
+          pendingFiles.append(original.lastPathComponent)
           continue
         }
         guard values.isRegularFile == true else { continue }
@@ -499,6 +505,7 @@ final class ReceiptScanner {
         stamps[url.path] = fingerprint
         if (values.fileSize ?? 0) == 0 || (automatic && old != fingerprint) {
           pending += 1
+          pendingFiles.append(original.lastPathComponent)
           continue
         }
         if let (savedStamp, hash) = hashes[url.path], savedStamp == fingerprint,
@@ -519,6 +526,7 @@ final class ReceiptScanner {
         guard data.count <= 40_000_000 else { throw failure("Receipt exceeds 40 MB.") }
         guard !data.isEmpty, try Self.stamp(url) == fingerprint else {
           pending += 1
+          pendingFiles.append(original.lastPathComponent)
           continue
         }
         let hash = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
@@ -531,7 +539,7 @@ final class ReceiptScanner {
         seen.insert(hash)
       } catch { errors.append(original.lastPathComponent + ": " + error.localizedDescription) }
     }
-    return ["records": records, "errors": errors, "duplicates": duplicates, "pending": pending]
+    return ["records": records, "errors": errors, "duplicates": duplicates, "pending": pending, "pendingFiles": pendingFiles]
   }
 }
 
@@ -600,7 +608,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
       contentRect: NSRect(x: 0, y: 0, width: 1200, height: 840),
       styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false
     )
-    window.title = "Heidy’s Bakery"
+    window.title = "The Little Dot — tea & bakery"
     window.minSize = NSSize(width: 760, height: 560)
     window.contentView = web
     window.center()
@@ -678,6 +686,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
           id,
           [
             "state": try store.state(), "seed": seed, "dataPath": store.root.path,
+            "appVersion": ["version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown", "build": Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown"],
+            "inboxStatus": UserDefaults.standard.dictionary(forKey: "receiptInboxStatus") ?? [:],
             "inbox": ProcessInfo.processInfo.environment["HEIDY_RECEIPT_INBOX"]
               ?? (try? inboxURL()?.path) ?? UserDefaults.standard.string(forKey: "receiptInbox")
               ?? "",
@@ -728,11 +738,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
             let urls =
               try folder.map { try fm.contentsOfDirectory(at: $0, includingPropertiesForKeys: nil) }
               ?? chosen
-            let result = self.scanner.collect(
+            let scanned = self.scanner.collect(
               urls, root: root, known: known, ignored: ignored, automatic: automatic)
-            DispatchQueue.main.async { self.reply(id, result) }
+            DispatchQueue.main.async {
+              var result = scanned
+              if let folder, (try? self.inboxURL()?.path) == folder.path {
+                let timestamp = ISO8601DateFormatter().string(from: Date())
+                var status = UserDefaults.standard.dictionary(forKey: "receiptInboxStatus") ?? [:]
+                if status["path"] as? String != folder.path { status = [:] }
+                status["path"] = folder.path
+                status["lastChecked"] = timestamp
+                if (result["errors"] as? [String])?.isEmpty == true { status["lastSuccess"] = timestamp }
+                status["errors"] = result["errors"]
+                status["pending"] = result["pending"]
+                status["pendingFiles"] = result["pendingFiles"]
+                if ProcessInfo.processInfo.environment["HEIDY_DATA_DIR"] == nil {
+                  UserDefaults.standard.set(status, forKey: "receiptInboxStatus")
+                }
+                result["inboxStatus"] = status
+              }
+              self.reply(id, result)
+            }
           } catch {
             DispatchQueue.main.async {
+              if let folder, (try? self.inboxURL()?.path) == folder.path,
+                ProcessInfo.processInfo.environment["HEIDY_DATA_DIR"] == nil {
+                var status = UserDefaults.standard.dictionary(forKey: "receiptInboxStatus") ?? [:]
+                if status["path"] as? String != folder.path { status = [:] }
+                status["path"] = folder.path
+                status["lastChecked"] = ISO8601DateFormatter().string(from: Date())
+                status["errors"] = [error.localizedDescription]
+                status["pending"] = 0
+                status["pendingFiles"] = [String]()
+                UserDefaults.standard.set(status, forKey: "receiptInboxStatus")
+              }
               self.reply(
                 id,
                 error: "Choose the receipt folder again in Settings: " + error.localizedDescription)
@@ -765,7 +804,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         }
       case "importExcel":
         if let url = panel(
-          "Choose a Heidy Bakery Excel export", types: [UTType(filenameExtension: "xlsx")!])
+          "Import an app-format Excel workbook", types: [UTType(filenameExtension: "xlsx")!])
         {
           reply(id, try readWorkbook(url))
         } else {
@@ -855,8 +894,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         req.recognitionLevel = .accurate
         req.usesLanguageCorrection = true
         try VNImageRequestHandler(cgImage: image).perform([req])
-        return (req.results ?? []).compactMap { $0.topCandidates(1).first?.string }.joined(
-          separator: "\n")
+        // Vision may return the description column before the price column.
+        // Group observations by their vertical centres to preserve receipt rows.
+        var rows: [[VNRecognizedTextObservation]] = []
+        for observation in (req.results ?? []).sorted(by: { $0.boundingBox.midY > $1.boundingBox.midY }) {
+          if let index = rows.firstIndex(where: {
+            guard let first = $0.first else { return false }
+            return abs(first.boundingBox.midY - observation.boundingBox.midY)
+              < min(first.boundingBox.height, observation.boundingBox.height) * 0.5
+          }) {
+            rows[index].append(observation)
+          } else { rows.append([observation]) }
+        }
+        return rows.map { row in
+          row.sorted { $0.boundingBox.minX < $1.boundingBox.minX }
+            .compactMap { $0.topCandidates(1).first?.string }.joined(separator: " ")
+        }.joined(separator: "\n")
       } catch {
         ocrErrors.append(error.localizedDescription)
         return ""
@@ -1018,6 +1071,42 @@ if CommandLine.arguments.contains("--export-fixture"), CommandLine.arguments.cou
     }
     guard try Data(contentsOf: base.appendingPathComponent("Receipts/test.txt")) == receiptData
     else { throw failure("Original receipt changed") }
+    // New receipt quantities and learned product setups must survive full backups.
+    let costing: [String: Any] = [
+      "ingredientId": "egg", "retailer": "costco", "productCode": "1025795",
+      "purchasePackSize": 60, "purchaseUnit": "each", "packSize": 3000,
+      "unit": "g", "confirmed": true,
+    ]
+    var productState = state
+    productState["ingredients"] = [[
+      "id": "egg", "name": "Egg", "kind": "ingredient", "supplier": "Costco",
+      "price": 16.58, "size": 6000, "unit": "g", "updated": "2026-08-24",
+      "history": [[String: Any]](),
+    ]] as [[String: Any]]
+    productState["receipts"] = [[
+      "id": "test", "file": "test.txt", "originalName": "test.txt", "supplier": "Costco",
+      "date": "2026-08-24", "text": "", "status": "Reviewed", "importedAt": "2026-08-24T12:00:00Z",
+      "lines": [[
+        "description": "KS 5DZ EGGS", "ingredientId": "egg", "productCode": "1025795",
+        "price": 16.58, "size": 120, "unit": "each", "packSize": 60,
+        "packageCount": 2, "excluded": false, "costing": costing,
+      ]] as [[String: Any]],
+    ]] as [[String: Any]]
+    productState["mappings"] = ["costco|sku:1025795": [
+      "ingredientId": "egg", "size": 120, "unit": "each", "packSize": 60, "costing": costing,
+    ]] as [String: [String: Any]]
+    try store.save(productState)
+    let migratedProductState = try store.state()
+    guard let products = (migratedProductState as? [String: Any])?["products"] as? [String: Any],
+      (products["records"] as? [String: Any])?.count == 1 else {
+      throw failure("Legacy saved product migration failed")
+    }
+    let productBackup = try store.backup()
+    try store.save(state)
+    _ = try store.restore(productBackup)
+    guard try jsonData(store.state()) == jsonData(migratedProductState) else {
+      throw failure("Confirmed recipe quantities or learned product setup lost in backup")
+    }
     let snapshot = try jsonData(store.state())
     var badState = state
     badState["receipts"] = [["id": "broken"]]

@@ -1,18 +1,20 @@
-# Heidy’s Bakery — first working version
+# Heidy Bakery — installation and setup
 
-This app runs on your Mac and follows the approved five-tab design. It does not need a server, a subscription or an AI account.
+This app runs locally on your Mac. It does not need a server, a subscription or an AI account.
 
 ## Install
 
-1. Unzip **Heidy Bakery Mac.zip**.
+1. Download **Heidy Bakery Mac.zip** directly on your Mac and double-click it to unzip.
 2. Drag **Heidy Bakery.app** into Applications.
 3. Open the app.
 
-This is a test build, not yet signed and notarized for normal Apple distribution. macOS may block its first launch. Do not disable Mac security settings. Arvind can help with the initial test installation; an Apple-notarized release is a separate distribution step.
+These instructions accompany the signed, Apple-notarized release produced by `build.sh --release`. A **LOCAL TEST** ZIP is for development and should not be sent as an installer. If the app cannot open, send Arvind the exact message and your macOS version from **Apple menu → About This Mac**. Do not disable Mac security settings.
 
 The app is built for Intel and Apple Silicon Macs running macOS 13 or later. It has been exercised on the development Mac; Heidy’s Mac still needs a compatibility check.
 
 ## First setup
+
+Already using the app? Save a full backup in the current app and quit. Unzip the update directly on your Mac in an empty folder, then drag **Heidy Bakery.app** into Applications and choose **Replace**. If Finder adds “2” to the new app name, rename that new copy to **Heidy Bakery.app** before moving it. Your existing library remains in Application Support. Do not restore an older backup or repeat the first setup during a normal update.
 
 1. On the welcome screen, read **Import checks**, then choose **Import reviewed spreadsheet data**. This loads 11 recipe sheets and 197 ingredient/packaging records. Your original spreadsheets stay unchanged.
 2. In **Settings**, enter your retail and bulk markup percentages. They start blank so the app does not assume your preferred pricing.
@@ -34,17 +36,21 @@ Recipe totals include all ingredient and packaging rows, shown in separate secti
 ## Receipts
 
 1. Choose **Check receipt folder**, or **Add photos / PDFs**.
-2. Select a receipt. Confirm its retailer and purchase date.
-3. Use **Find candidate lines**, or **Add purchase** manually.
+2. Select a receipt. Recognized retailer names and unambiguous purchase dates are filled automatically. Check them against the original.
+3. Review the automatically prepared purchase lines. Use **Find candidate lines** to add further detected lines, or **Add purchase** manually. Existing unreviewed receipts are prepared when the updated app first opens; entered details are preserved.
 4. For each purchase, select the ingredient, confirm the paid total and total quantity, and check the unit. For 60 eggs, use 60 and “each”.
 5. Exclude personal items, refunds and non-ingredient expenses.
-6. Choose **Approve price updates** after checking the original receipt.
+6. Resolve the links under **Before updating Ingredients**. Suggested items need review, and package quantities absent from the receipt must be entered. Then choose **Approve price updates** after checking the original receipt.
 
 Saved retailer/description matches are reused. Duplicate files are skipped. Older purchases are retained in history without replacing a newer dated purchase. Reviewed receipts remain searchable by retailer, dates and receipt text. **Open original** shows the full image or PDF in the Mac’s usual viewer.
 
 Text recognition needs testing with your actual receipts. It never approves purchases automatically. PDF text recognition covers up to 10 pages; the full original is retained. Individual files must be no larger than 40 MB.
 
 ## Excel and backups
+
+Receipt cards lead with the matched ingredient name and retain the original receipt wording underneath. For older drafts, **Review updated suggestions** shows a comparison; apply only the changes you want. A previous quantity from Ingredients is a reference and requires confirmation that it represents one purchased pack.
+
+When purchase and recipe units differ, enter the confirmed usable recipe quantity in one pack. For example, an egg purchase stays recorded by count while recipe costing uses a confirmed weight. The app does not assume egg weights or convert volume to weight automatically. The product setup is remembered after receipt approval. Unmatched purchases can be linked, added as new ingredients, or excluded.
 
 **Export all to Excel** creates an independent workbook with editable inputs and formulas. Open it in Excel to recalculate. The **Read me** sheet explains which sheets to edit. **Export this recipe** exports one recipe and the master items it needs.
 

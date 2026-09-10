@@ -31,6 +31,13 @@ const cases={
  zero_yield(s,t){s.recipes[0].yield=t.Recipes[1][2]=0},
  reorder_master(s,t){[s.ingredients[0],s.ingredients[1]]=[s.ingredients[1],s.ingredients[0]];for(const col of [0,1,2,3,4,5,6,7,9])[t.Ingredients[1][col],t.Ingredients[2][col]]=[t.Ingredients[2][col],t.Ingredients[1][col]]},
  reorder_settings(s,t){[t.Settings[1],t.Settings[3]]=[t.Settings[3],t.Settings[1]]},
+ confirmed_recipe_quantity(s,t){
+  const {fixture,now}=require('./receipt-product-fixture.cjs'),next=fixture(),r=next.receipts[0];
+  r.lines=r.lines.filter(l=>l.ingredientId==='egg');
+  Object.assign(r.lines[0],{packSize:60,needsReview:false,priceChangeConfirmed:true,costing:{ingredientId:'egg',retailer:'costco',productCode:'1025795',purchasePackSize:60,purchaseUnit:'each',packSize:3000,unit:'g',confirmed:true}});
+  M.approveReceipt(next,r,now);Object.assign(s,next);
+  for(const sheet of M.workbook(s).sheets)t[sheet.name].splice(0,t[sheet.name].length,...sheet.rows);
+ },
 };
 const expected={};
 for(const [name,change]of Object.entries(cases)){

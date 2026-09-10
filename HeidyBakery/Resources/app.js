@@ -21,6 +21,9 @@ let state = M.empty(),
   selectedRecipe = null,
   selectedReceipt = null,
   inbox = '',
+  appVersion = null,
+  pickupStatus = null,
+  checkingFolder = false,
   lastSaved = null,
   search = '',
   pending = {},
@@ -89,7 +92,7 @@ async function save(message = 'Saved', rerender = true) {
   const previous = queuedState || lastSaved || M.empty();
   let snapshot;
   try {
-    M.validate(state);
+    M.normalizeState(state);
     for (const r of state.recipes) {
       const old = previous.recipes.find(x => x.id === r.id);
       if (old) {
@@ -145,16 +148,49 @@ function openReceiptRecord(id) {
     return;
   }
   selectedReceipt = id;
-  tab('receipts');
+  if (viewState.receipts) viewState.receipts.fields = {};
+  tab('receipts', true);
 }
-function tab(name) {
+const viewState = {};
+const viewLabels = {prices: 'Price list', recipes: 'Recipes', ingredients: 'Ingredients', receipts: 'Receipts', 'margin-watch': 'Margin Watch', settings: 'Settings'};
+let returnView = null;
+let settingsDraft = null;
+function rememberView() {
+  const v = viewState[currentTab] ||= {fields: {}};
+  $$('#main .filters input, #main .filters select, .recipe-picker input').forEach(el => v.fields[el.id] = el.value);
+  v.top = $('.workspace').scrollTop;
+  v.scrolls = $$('#main .scroll').map(el => [el.scrollLeft, el.scrollTop]);
+}
+function restoreFilters() {
+  const v = viewState[currentTab];
+  if (!v) return;
+  for (const [id, value] of Object.entries(v.fields)) if ($('#' + id)) $('#' + id).value = value;
+}
+function tab(name, linked = false) {
+  if (!viewLabels[name]) return;
+  rememberView();
+  if (linked && viewState[name]) {
+    if (name === 'receipts') viewState[name].fields = {};
+    if (name === 'recipes') viewState[name].fields['recipe-search'] = '';
+  }
+  if (linked && name !== currentTab) returnView = currentTab;
+  else if (!linked) returnView = null;
   currentTab = name;
   search = '';
   render();
 }
+function openRecipeRecord(id) {
+  selectedRecipe = id;
+  if (viewState.recipes) viewState.recipes.fields['recipe-search'] = '';
+  tab('recipes', true);
+}
 $$('[data-tab]').forEach(b => b.onclick = () => tab(b.dataset.tab));
 function render() {
-  $$('[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === currentTab));
+  $$('[data-tab]').forEach(b => {
+    b.classList.toggle('active', b.dataset.tab === currentTab);
+    if (b.dataset.tab === currentTab) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+  });
+  document.body.dataset.view = currentTab;
   if (!state.imported && state.recipes.length === 0 && currentTab === 'prices') {
     welcome();
     return;
@@ -167,6 +203,12 @@ function render() {
     receipts: receiptPage,
     settings: settingsPage
   })[currentTab]();
+  const v = viewState[currentTab];
+  $('.workspace').scrollTop = v?.top || 0;
+  $$('#main .scroll').forEach((el, i) => { el.scrollLeft = v?.scrolls?.[i]?.[0] || 0; el.scrollTop = v?.scrolls?.[i]?.[1] || 0; });
+  $('#back-view').hidden = !returnView;
+  $('#back-view').textContent = returnView ? '← Back to ' + viewLabels[returnView] : 'Back';
+  $('#back-view').onclick = () => { const destination = returnView; tab(destination); $('[data-tab="' + destination + '"]').focus(); };
 }
 const action = (id, fn) => {
   const b = $(id);
@@ -253,6 +295,7 @@ function pricePage() {
   action('#excel-prices', () => exportExcel());
   action('#go-markup', () => tab('settings'));
   $('#price-search').oninput = $('#price-filter').onchange = priceRows;
+  restoreFilters();
   priceRows();
 }
 function priceRows() {
@@ -264,8 +307,7 @@ function priceRows() {
     return `<tr><td class="recipe-name"><button class="link" data-open-recipe="${esc(r.id)}">${esc(r.name)}</button><div class="small">Per ${esc(r.unit)}${r.bulkMin ? ' · bulk min ' + r.bulkMin : ''}</div></td><td>${r.yield}</td><td class="num">${money(c.unit)}</td><td class="num">${money(c.retailSuggested)}</td><td><input class="price" aria-label="${esc(r.name)} retail price" data-price-id="${esc(r.id)}" data-price-kind="retail" type="number" min="0" step=".01" value="${r.retail ?? ''}"></td><td class="num ${M.margin(c.unit, r.retail) < 0 ? 'bad' : ''}">${pct(M.margin(c.unit, r.retail))}</td><td class="num">${money(c.bulkSuggested)}</td><td><input class="price" aria-label="${esc(r.name)} bulk price" data-price-id="${esc(r.id)}" data-price-kind="bulk" type="number" min="0" step=".01" value="${r.bulk ?? ''}"></td><td class="num ${M.margin(c.bulkUnit, r.bulk) < 0 ? 'bad' : ''}">${pct(M.margin(c.bulkUnit, r.bulk))}</td><td>${reviewCell(r, c)}</td></tr>`;
   }).join('')}</tbody></table>` : '<div class="empty">No matching recipes. Create a recipe to begin.</div>';
   $$('[data-open-recipe]').forEach(b => b.onclick = () => {
-    selectedRecipe = b.dataset.openRecipe;
-    tab('recipes');
+    openRecipeRecord(b.dataset.openRecipe);
   });
   $$('[data-review-item]').forEach(b => b.onclick = () => editIngredient(state.ingredients.find(i => i.id === b.dataset.reviewItem)));
   $$('[data-price-id]').forEach(i => i.onchange = async () => {
@@ -294,17 +336,17 @@ function marginWatchPage() {
     <div class="toolbar">
       <div>
         <h1>Margin Watch</h1>
-        <p class="sub">Proactive tracking of ingredient cost inflation and recipe margin erosion.</p>
+        <p class="sub">See which recipes are affected when purchase costs rise.</p>
       </div>
     </div>
     ${!hasData ? `
       <div class="pane">
-        <h3>No margin drift detected yet</h3>
-        <p class="sub">This dashboard proactively flags which ingredients are surging in price and which recipes are losing profit margin per piece.</p>
+        <h3>No cost increases to display</h3>
+        <p class="sub">Compare recorded ingredient costs and recipe margins. A clear list does not confirm that every cost is current.</p>
         <p class="small">As you scan and approve new receipts, ingredient purchase history accumulates automatically. When an ingredient's price increases above its baseline, it will appear here ranked by percentage and dollar impact.</p>
       </div>
     ` : `
-      <div class="two">
+      <div class="two margin-layout">
         <div class="pane">
           <h3>Ingredients rising fastest (${ingList.length})</h3>
           <p class="small sub">Ranked by percentage cost increase since first recorded purchase.</p>
@@ -344,7 +386,7 @@ function marginWatchPage() {
           ` : '<p class="small">No ingredients with price changes yet.</p>'}
         </div>
 
-        <div class="pane">
+        <div class="pane margin-recipes">
           <h3>Recipes losing margin (${recList.length})</h3>
           <p class="small sub">Ranked by dollar profit lost per piece since last price review.</p>
           ${recList.length ? `
@@ -391,14 +433,14 @@ function marginWatchPage() {
 
   $$('#main [data-review-item]').forEach(b => b.onclick = () => editIngredient(state.ingredients.find(i => i.id === b.dataset.reviewItem)));
   $$('#main [data-open-recipe]').forEach(b => b.onclick = () => {
-    selectedRecipe = b.dataset.openRecipe;
-    tab('recipes');
+    openRecipeRecord(b.dataset.openRecipe);
   });
 }
 function recipePage() {
   if (!selectedRecipe || !state.recipes.some(r => r.id === selectedRecipe)) selectedRecipe = state.recipes[0]?.id;
-  $('#main').innerHTML = `<div class="toolbar"><h1>Recipes</h1><div class="actions"><button id="new-recipe" class="primary">New recipe</button><button id="export-recipe">Export this recipe</button></div></div><div class="filters"><label class="wide">Find a recipe<input id="recipe-search" placeholder="Search recipes"></label><label class="wide">Select recipe<select id="recipe-select"></select></label></div><div id="recipe-detail"></div>`;
+  $('#main').innerHTML = `<div class="toolbar"><h1>Recipes</h1><div class="actions"><button id="new-recipe" class="primary">New recipe</button><button id="export-recipe">Export this recipe</button><button id="import-recipes">Import from Excel</button></div></div><div class="recipe-layout"><aside class="recipe-picker"><label>Find a recipe<input id="recipe-search" placeholder="Search recipes"></label><label class="recipe-select-label">Select recipe<select id="recipe-select"></select></label><div id="recipe-list" class="recipe-list" aria-label="Recipe selection"></div></aside><div id="recipe-detail"></div></div>`;
   action('#new-recipe', () => editRecipe());
+  action('#import-recipes', importExcel);
   action('#export-recipe', () => {
     const r = state.recipes.find(r => r.id === selectedRecipe);
     if (r) exportExcel(r);
@@ -408,13 +450,16 @@ function recipePage() {
       rs = state.recipes.filter(r => r.name.toLowerCase().includes(term));
     $('#recipe-select').innerHTML = rs.map(r => `<option value="${esc(r.id)}" ${r.id === selectedRecipe ? 'selected' : ''}>${esc(r.name)}</option>`).join('');
     selectedRecipe = $('#recipe-select').value;
+    $('#recipe-list').innerHTML = rs.map(r => `<button data-select-recipe="${esc(r.id)}" class="${r.id === selectedRecipe ? 'selected' : ''}" aria-pressed="${r.id === selectedRecipe}">${esc(r.name)}</button>`).join('') || '<p class="small">No matching recipes.</p>';
+    $$('[data-select-recipe]').forEach(b => b.onclick = () => { selectedRecipe = b.dataset.selectRecipe; opts(); $('[data-select-recipe="' + selectedRecipe + '"]').focus(); });
     recipeDetail();
   }
   $('#recipe-search').oninput = opts;
   $('#recipe-select').onchange = e => {
     selectedRecipe = e.target.value;
-    recipeDetail();
+    opts();
   };
+  restoreFilters();
   opts();
 }
 function lineRow(d, r) {
@@ -534,6 +579,7 @@ function ingredientPage() {
   $('#main').innerHTML = `<div class="toolbar"><div><h1>Ingredients</h1><p class="sub">Purchase prices, package sizes and history shared by your recipes.</p></div><button id="new-ingredient" class="primary">New ingredient / packaging</button></div><div class="filters"><label class="wide">Search<input id="ingredient-search" placeholder="Ingredient or supplier"></label><label>Show<select id="ingredient-filter"><option value="all">All items</option><option value="ingredient">Ingredients</option><option value="packaging">Packaging</option><option value="missing">Missing costs</option></select></label></div><div id="ingredient-table" class="scroll"></div>`;
   action('#new-ingredient', () => editIngredient());
   $('#ingredient-search').oninput = $('#ingredient-filter').onchange = ingredientRows;
+  restoreFilters();
   ingredientRows();
 }
 function ingredientRows() {
@@ -586,7 +632,7 @@ function editIngredient(original = null) {
   });
 }
 function receiptPage() {
-  $('#main').innerHTML = `<div class="toolbar"><div><h1>Receipts</h1><p class="sub">Original receipts stay saved. Purchase prices change only after review.</p></div><div class="actions"><button id="scan-inbox">Check receipt folder</button><button id="add-receipts" class="primary">Add photos / PDFs</button></div></div><div class="filters"><label class="wide">Search<input id="receipt-search" placeholder="Retailer, receipt text or item"></label><label>From<input id="receipt-from" type="date"></label><label>To<input id="receipt-to" type="date"></label><label>Retailer<select id="receipt-store"><option value="">All retailers</option>${[...new Set(state.receipts.map(r => r.supplier).filter(Boolean))].sort().map(s => `<option>${esc(s)}</option>`).join('')}</select></label><label>Status<select id="receipt-status"><option value="">All receipts</option><option>Needs review</option><option>Reviewed</option><option>Archived</option></select></label></div><div class="split"><aside><h3 id="receipt-count"></h3><div id="receipt-list"></div><div class="actions"><button id="prev-receipts">Previous</button><button id="next-receipts">Next</button></div></aside><div id="receipt-detail"></div></div>`;
+  $('#main').innerHTML = `<div class="toolbar"><div><h1>Receipts</h1><p class="sub">Original receipts stay saved. Purchase prices change only after review.</p></div><div class="actions"><button id="scan-inbox">Check receipt folder</button><button id="add-receipts" class="primary">Add photos / PDFs</button></div></div><div class="pickup-status small" data-pickup-status></div><div class="filters"><label class="wide">Search<input id="receipt-search" placeholder="Retailer, receipt text or item"></label><label>From<input id="receipt-from" type="date"></label><label>To<input id="receipt-to" type="date"></label><label>Retailer<select id="receipt-store"><option value="">All retailers</option>${[...new Set(state.receipts.map(r => r.supplier).filter(Boolean))].sort().map(s => `<option>${esc(s)}</option>`).join('')}</select></label><label>Status<select id="receipt-status"><option value="">All receipts</option><option>Needs review</option><option>Reviewed</option><option>Archived</option></select></label></div><div class="split"><aside><h3 id="receipt-count"></h3><div id="receipt-list"></div><div class="actions"><button id="prev-receipts">Previous</button><button id="next-receipts">Next</button></div></aside><div id="receipt-detail"></div></div>`;
   let page = 0;
   window.receiptPaging = {
     get: () => page,
@@ -606,7 +652,9 @@ function receiptPage() {
   });
   action('#add-receipts', () => importReceipts('importReceipts'));
   action('#scan-inbox', () => importReceipts('scanInbox'));
+  restoreFilters();
   receiptRows(true);
+  renderPickupStatus();
 }
 function receiptRows(reveal = false) {
   const term = $('#receipt-search').value.toLowerCase(),
@@ -646,13 +694,18 @@ function startInboxChecks() {
 async function importReceipts(actionName, automatic = false) {
   if (receiptImportRunning) return;
   receiptImportRunning = true;
-  const epoch = dataEpoch;
+  const epoch = dataEpoch, scanFolder = inbox;
+  if (actionName === 'scanInbox') { checkingFolder = true; renderPickupStatus(); }
   const collect = async () => {
     await saveTail;
     const result = await native(actionName, {
       automatic
     });
-    if (!result || epoch !== dataEpoch) return;
+    if (!result || epoch !== dataEpoch || actionName === 'scanInbox' && scanFolder !== inbox) return;
+    if (actionName === 'scanInbox') {
+      pickupStatus = result.inboxStatus || {path:scanFolder,lastChecked:new Date().toISOString(),lastSuccess:result.errors.length ? pickupStatus?.lastSuccess : new Date().toISOString(),errors:result.errors,pending:result.pending || 0,pendingFiles:result.pendingFiles || []};
+      renderPickupStatus();
+    }
     // A modal may have opened while OCR was running. Retry once it is closed.
     if (automatic && editing()) return;
     let added = 0,
@@ -663,6 +716,7 @@ async function importReceipts(actionName, automatic = false) {
         continue;
       }
       if (!r.file) continue;
+      M.prepareReceipt(state, r);
       state.receipts.push(r);
       if (!automatic) selectedReceipt = r.id;
       added++;
@@ -675,11 +729,60 @@ async function importReceipts(actionName, automatic = false) {
   try {
     if (automatic) await collect();else await busy('Reading receipts on this Mac…', collect);
   } catch (e) {
+    if (actionName === 'scanInbox' && scanFolder === inbox) { pickupStatus = {...pickupStatus,path:scanFolder,lastChecked:new Date().toISOString(),errors:[e.message]}; renderPickupStatus(); }
     if (!automatic || e.message !== lastInboxError) notice('Receipt folder: ' + e.message, true);
     lastInboxError = e.message;
   } finally {
     receiptImportRunning = false;
+    if (actionName === 'scanInbox') { checkingFolder = false; renderPickupStatus(); }
   }
+}
+function renderPickupStatus() {
+  const status = pickupStatus?.path === inbox ? pickupStatus : null;
+  const date = value => value && !Number.isNaN(Date.parse(value)) ? new Date(value).toLocaleString() : 'Not yet';
+  const text = !inbox ? 'No receipt folder selected.' : checkingFolder ? 'Checking receipt folder…' : `Last check: ${date(status?.lastChecked)}. Last successful check: ${date(status?.lastSuccess)}.`;
+  $$('[data-pickup-status]').forEach(el => el.innerHTML = `<p>${esc(text)}</p>${status?.pending ? `<p>${status.pending} file(s) waiting for download or a complete write.</p>${status.pendingFiles?.length ? `<details><summary>Waiting files</summary><ul>${status.pendingFiles.map(f=>`<li>${esc(f)}</li>`).join('')}</ul></details>` : ''}` : ''}${status?.errors?.length ? `<div class="bad">${status.errors.map(e=>`<p>${esc(e)}</p>`).join('')}</div>` : ''}`);
+}
+function openIngredientRecord(id) {
+  if (viewState.ingredients) viewState.ingredients.fields = {};
+  tab('ingredients',true);
+  const item = state.ingredients.find(i=>i.id===id);
+  if (item) editIngredient(item);
+}
+function receiptSummary(r) {
+  if (!r.approvalSummary || r.status !== 'Reviewed') return '';
+  const v = r.approvalSummary;
+  return `<div class="note" id="receipt-result"><strong>${v.updated} ingredient prices updated</strong><p>${v.historyOnly} older purchases saved to history · ${v.excluded} excluded</p><div class="actions">${v.ingredientIds.map(id=>`<button data-view-ingredient="${esc(id)}">${esc(state.ingredients.find(i=>i.id===id)?.name || 'Ingredient')}</button>`).join('')}</div></div>`;
+}
+const unitMoney = value => value === null ? '—' : '$' + value.toFixed(5);
+function receiptPurchases(r) {
+  const editable = r.status === 'Needs review', issues = M.receiptIssues(state,r);
+  const row = (l,index) => {
+    const i = state.ingredients.find(i=>i.id===l.ingredientId), change = M.purchaseChange(state,r,l);
+    const match = !i ? M.matchIngredient(state,r.supplier,l.description,l.productCode) : null;
+    const suggestion = match && match.reason !== 'Confirm the flour type' && match.candidates.length === 1 ? match.candidates[0].name : '';
+    const quantity=M.purchaseQuantity(state,r,l);
+    const basicReady = i && M.nonnegative(l.price) && quantity && (l.price!==0||l.freeConfirmed) && (!l.packSize||Math.abs(l.packSize*l.packageCount-l.size)<.000001);
+    const title=i?.name || (suggestion ? 'Suggested: '+suggestion : l.description || 'Purchase '+(index+1));
+    return `<div class="purchase"><div class="toolbar"><strong>${esc(title)}</strong>${editable ? `<div class="actions"><button data-edit-purchase="${index}">${l.needsReview ? 'Review' : 'Edit'}</button>${basicReady && (l.needsReview || change.unusual && !l.priceChangeConfirmed) && !l.excluded ? `<button data-confirm-purchase="${index}">Confirm</button>` : ''}</div>` : ''}</div>
+      <div class="small">Receipt: ${esc(l.description)}${l.productCode ? ' · Product '+esc(l.productCode) : ''}</div>
+      ${!i ? `<p class="small">${match?.reason === 'Confirm the flour type' ? 'Confirm the flour type from the package.' : suggestion ? 'Confirm this ingredient and its pack size.' : 'Match an ingredient, add a new one, or exclude this purchase.'}</p>` : l.needsReview ? '<div class="small">Suggested match · check against the receipt</div>' : ''}
+      ${l.parseNote && l.needsReview ? `<p class="small bad">${esc(l.parseNote)}</p>` : ''}
+      <p>${l.excluded ? 'Excluded' : 'Paid '+money(l.price)+(l.size ? ' · Purchased '+l.size+' '+esc(l.unit) : ' · Confirm purchased quantity')}</p>
+      ${l.packSize && l.packageCount ? `<div class="small">${l.packSize} ${esc(l.unit)} × ${l.packageCount} packs${l.quantitySource ? ' · '+esc(l.quantitySource) : ''}</div>` : l.packageCount > 1 ? `<div class="small">${l.packageCount} packs · enter their quantity</div>` : ''}
+      ${quantity && M.factor(l.unit,i?.unit)===null ? `<p class="small">For recipes: ${quantity.size} ${esc(quantity.unit)} · ${l.costing.packSize} ${esc(l.costing.unit)} per pack, confirmed</p>` : ''}
+      ${!l.excluded && change.newCost!==null ? `<div class="small">${unitMoney(change.oldCost)} → ${unitMoney(change.newCost)} / ${esc(change.unit)}${change.percent !== null ? ' · '+(change.percent>0?'+':'')+change.percent.toFixed(1)+'%' : ''}</div>${change.older ? '<p class="small">Older purchase: history only.</p>' : change.unusual ? '<p class="bad small">Check this price change.</p>' : ''}` : ''}</div>`;
+  };
+  if (!editable) return r.lines.map(row).join('');
+  const needs = new Set(issues.filter(x=>x.field==='line').map(x=>x.index));
+  const pending=r.lines.map((l,n)=>({l,n})).filter(x=>!x.l.excluded&&needs.has(x.n));
+  const ready=r.lines.map((l,n)=>({l,n})).filter(x=>!x.l.excluded&&!needs.has(x.n));
+  const excluded=r.lines.map((l,n)=>({l,n})).filter(x=>x.l.excluded);
+  return `${pending.map(x=>row(x.l,x.n)).join('')}${ready.length ? `<details class="receipt-ready"><summary>Ready (${ready.length})</summary>${ready.map(x=>row(x.l,x.n)).join('')}</details>` : ''}${excluded.length ? `<details><summary>Excluded (${excluded.length})</summary>${excluded.map(x=>row(x.l,x.n)).join('')}</details>` : ''}`;
+}
+function receiptPreviewHTML(r) {
+  const preview=M.receiptPreview(state,r);
+  return `<p>${esc(r.supplier)} · ${esc(r.date)}</p><div class="scroll"><table><thead><tr><th>Ingredient</th><th>Current / unit</th><th>Receipt / unit</th><th>Change</th></tr></thead><tbody>${preview.changes.map(c=>`<tr><td>${esc(c.name)}<div class="small">${esc(c.unit)}</div></td><td>${unitMoney(c.oldCost)}</td><td>${unitMoney(c.newCost)}</td><td>${c.older ? 'History only' : c.percent === null ? 'New cost' : (c.percent>0?'+':'')+c.percent.toFixed(1)+'%'}</td></tr>`).join('')}</tbody></table></div><h3>Affected recipes (${preview.recipes.length})</h3>${preview.recipes.length ? `<div class="scroll"><table><thead><tr><th>Recipe</th><th>Current / piece</th><th>After / piece</th></tr></thead><tbody>${preview.recipes.map(x=>`<tr><td>${esc(x.name)}</td><td>${money(x.before)}</td><td>${money(x.after)}</td></tr>`).join('')}</tbody></table></div>` : '<p>No recipe costs change.</p>'}<p class="small">Selling prices stay unchanged. Older purchases enter history only.</p>`;
 }
 async function receiptDetail() {
   const r = state.receipts.find(r => r.id === selectedReceipt);
@@ -688,38 +791,60 @@ async function receiptDetail() {
     return;
   }
   const editable = r.status === 'Needs review';
-  $('#receipt-detail').innerHTML = `<div class="toolbar"><h2>${esc(r.supplier || 'New receipt')}</h2><span class="pill">${esc(r.status)}</span></div><div class="two"><div class="pane"><div class="toolbar"><h3>Original receipt</h3><button id="open-original">Open original</button></div><div id="receipt-image" class="receipt-original">Loading preview…</div><p class="small">${esc(r.originalName)} · ${r.pages || 1} page(s). Open original for zoom and all pages.</p><details><summary>Recognized text</summary><pre class="ocr">${esc(r.text || 'No text recognized. You can enter purchase details manually.')}</pre>${r.ocrError ? `<p class="bad">Text recognition was incomplete. Enter the purchases from the original: ${esc(r.ocrError)}</p>` : ''}${r.ocrLimited ? '<p class="bad">Text recognition covered the first 10 pages only.</p>' : ''}</details></div><div class="pane"><h3>${editable ? 'Review purchases' : 'Saved review'}</h3><div class="fields two"><label>Retailer<input id="receipt-supplier" value="${esc(r.supplier)}" ${editable ? '' : 'disabled'}></label><label>Purchase date<input id="receipt-date" type="date" max="${today()}" value="${esc(r.date)}" ${editable ? '' : 'disabled'}></label></div><div id="purchases">${r.lines.map((l, index) => {
-    const i = state.ingredients.find(i => i.id === l.ingredientId),
-      old = M.unitCost(i);
-    return `<div class="purchase"><div class="toolbar"><strong>${esc(l.description || i?.name || 'Purchase ' + (index + 1))}</strong>${editable ? `<button data-edit-purchase="${index}">Edit</button>` : ''}</div><div>${esc(i?.name || 'Not matched')}</div><div class="small">${l.excluded ? 'Excluded from price updates' : money(l.price) + ' / ' + (l.size ?? '—') + ' ' + esc(l.unit)}</div>${!l.excluded ? `<div class="small">Current: ${old == null ? '—' : '$' + old.toFixed(5) + ' / ' + esc(i.unit)} · Purchase: ${M.positive(l.size) && l.price != null ? '$' + (l.price / l.size).toFixed(5) + ' / ' + esc(l.unit) : 'Confirm size'}</div>` : ''}</div>`;
-  }).join('')}</div>${editable ? '<div class="actions spacer"><button id="add-purchase">Add purchase</button><button id="suggest-lines">Find candidate lines</button></div><p class="small">Confirm the paid amount after discounts and the total package quantity. Exclude personal items and refunds. Text recognition can make mistakes.</p><div class="actions"><button id="approve-receipt" class="primary">Approve price updates</button><button id="archive-receipt">Archive without updates</button></div>' : '<p class="small spacer">Original receipt and purchase details retained. Older purchases are recorded in history without replacing newer prices.</p>'}${(r.notUpdated || []).map(x => `<p class="note">${esc(x.message)}</p>`).join('')}</div></div>`;
+  $('#receipt-detail').innerHTML = `<div class="toolbar"><h2>${esc(r.supplier || 'New receipt')}</h2><span class="pill">${esc(r.status)}</span></div><div class="two"><div class="pane"><div class="toolbar"><h3>Original receipt</h3><button id="open-original">Open original</button></div><div id="receipt-image" class="receipt-original">Loading preview…</div><p class="small">${esc(r.originalName)} · ${r.pages || 1} page(s). Open original for zoom and all pages.</p><details><summary>Recognized text</summary><pre class="ocr">${esc(r.text || 'No text recognized. You can enter purchase details manually.')}</pre>${r.ocrError ? `<p class="bad">Text recognition was incomplete. Enter the purchases from the original: ${esc(r.ocrError)}</p>` : ''}${r.ocrLimited ? '<p class="bad">Text recognition covered the first 10 pages only.</p>' : ''}</details></div><div class="pane"><h3>${editable ? 'Review purchases' : 'Saved review'}</h3><div class="fields two"><label>Retailer<input autocomplete="off" id="receipt-supplier" value="${esc(r.supplier)}" ${editable ? '' : 'disabled'}></label><label>Purchase date<input id="receipt-date" type="date" max="${today()}" value="${esc(r.date)}" ${editable ? '' : 'disabled'}><span id="receipt-date-help" class="small">${!r.date ? 'No purchase date saved. Enter the date on the receipt.' : r.dateFromReceipt ? 'Read from the receipt—check against the original.' : 'Saved purchase date'}</span></label></div><div id="receipt-readiness" aria-live="polite"></div><div id="purchases">${receiptPurchases(r)}</div>${editable ? '<div class="actions spacer"><button id="add-purchase">Add purchase</button><button id="suggest-lines">Find candidate lines</button></div><p class="small">Confirm the paid amount after discounts and the total package quantity. Exclude personal items and refunds. Text recognition can make mistakes.</p><div class="actions"><button id="approve-receipt" class="primary">Approve price updates</button><button id="archive-receipt">Archive without updates</button></div>' : '<p class="small spacer">Original receipt and purchase details retained. Older purchases are recorded in history without replacing newer prices.</p>'}${receiptSummary(r)}${(r.notUpdated || []).map(x => `<p class="note">${esc(x.message)}</p>`).join('')}</div></div>`;
   action('#open-original', () => native('openReceipt', {
     file: r.file
   }));
   if (editable) {
     $('#receipt-supplier').onchange = async e => {
-      state.receipts.find(x => x.id === r.id).supplier = e.target.value;
+      const receipt = state.receipts.find(x => x.id === r.id);
+      const changed = M.retailerKey(receipt.supplier) !== M.retailerKey(e.target.value);
+      receipt.supplier = e.target.value;
+      if (changed) for (const line of receipt.lines) {
+        if (!line.reviewMode || line.priceChangeConfirmed || line.excluded) continue;
+        if (line.quantitySource === 'Saved pack size') { line.packSize = null; line.size = null; line.unit = ''; line.quantitySource = ''; }
+        M.suggestReceiptLine(state,receipt.supplier,line);
+      }
       try {
-        await save('Saved', false);
+        await save('Saved', changed);
+        updateReceiptReadiness(state.receipts.find(x => x.id === r.id));
       } catch {}
     };
     $('#receipt-date').onchange = async e => {
-      if (!e.target.reportValidity()) return;
       state.receipts.find(x => x.id === r.id).date = e.target.value;
+      state.receipts.find(x => x.id === r.id).dateFromReceipt = false;
       try {
         await save('Saved', false);
+        updateReceiptReadiness(state.receipts.find(x => x.id === r.id));
       } catch {}
     };
+    updateReceiptReadiness(r);
     action('#add-purchase', () => editPurchase(r));
     action('#suggest-lines', () => suggestPurchases(r));
     $$('[data-edit-purchase]').forEach(b => b.onclick = () => editPurchase(r, Number(b.dataset.editPurchase)));
-    action('#approve-receipt', () => {
-      modal('Approve these purchases?', `<p>Update matched ingredient prices from ${esc(r.supplier || 'this retailer')} on ${esc(r.date || 'the confirmed date')}?</p><p>Your selling prices will stay unchanged. Older purchases will be kept in history.</p>`, async () => {
+    $$('[data-confirm-purchase]').forEach(b => b.onclick = async () => {
+      const l = state.receipts.find(x=>x.id===r.id).lines[Number(b.dataset.confirmPurchase)];
+      l.needsReview = false; l.priceChangeConfirmed = true;
+      try { await save('Purchase checked.'); } catch {}
+    });
+    action('#approve-receipt', async () => {
+      await saveTail;
+      const current = state.receipts.find(x => x.id === r.id);
+      const missing = M.receiptIssues(state, current);
+      if (missing.length) {
+        updateReceiptReadiness(current);
+        $('#receipt-readiness').scrollIntoView({block:'nearest'});
+        $('#receipt-readiness button')?.focus();
+        return;
+      }
+      const approvalSnapshot=JSON.stringify(state);
+      modal('Review price updates', receiptPreviewHTML(current), async () => {
+        if(JSON.stringify(state)!==approvalSnapshot) throw Error('Records changed. Close this preview and review the price updates again.');
         const candidate = clone(state),
           receipt = candidate.receipts.find(x => x.id === r.id);
         const count = M.approveReceipt(candidate, receipt);
         state = candidate;
-        await save(count + ' purchase prices reviewed.' + (receipt.notUpdated.length ? ' ' + receipt.notUpdated.map(x => x.message).join(' ') : ''));
+        await save(receipt.approvalSummary.updated + ' ingredient prices updated; ' + receipt.approvalSummary.historyOnly + ' older purchases saved to history; '+receipt.approvalSummary.excluded+' excluded.');
       }, 'Approve');
     });
     action('#archive-receipt', () => modal('Archive without price updates?', '<p>The original receipt will remain searchable. No ingredient prices will change.</p>', async () => {
@@ -727,6 +852,7 @@ async function receiptDetail() {
       await save('Receipt archived.');
     }, 'Archive'));
   }
+  $$('[data-view-ingredient]').forEach(b => b.onclick = () => openIngredientRecord(b.dataset.viewIngredient));
   try {
     const image = await native('previewReceipt', {
       file: r.file
@@ -736,78 +862,243 @@ async function receiptDetail() {
     if (currentTab === 'receipts' && selectedReceipt === r.id && $('#receipt-image')) $('#receipt-image').textContent = e.message;
   }
 }
+function updateReceiptReadiness(r) {
+  const issues = M.receiptIssues(state, r), box = $('#receipt-readiness');
+  if (!box) return;
+  const choice = $$('[data-receipt]').find(x => x.dataset.receipt === r.id);
+  if (choice) {
+    choice.querySelector('strong').textContent = r.supplier || 'Retailer not set';
+    choice.querySelector('span').textContent = r.date || 'Confirm date';
+  }
+  $('#receipt-detail h2').textContent = r.supplier || 'New receipt';
+  $('#receipt-date-help').textContent = !r.date ? 'No purchase date saved. Enter the date on the receipt.' : r.dateFromReceipt ? 'Read from the receipt—check against the original.' : 'Saved purchase date';
+  box.innerHTML = issues.length ? `<div class="note"><strong>Before updating Ingredients</strong><ul>${issues.map((x,n) => `<li><button class="receipt-fix" data-fix-receipt="${n}">${esc(x.message)}</button></li>`).join('')}</ul></div>` : '<p class="small">Ready to approve. Check the original and confirm the update below.</p>';
+  const updates=M.receiptRefresh(state,r);
+  if (updates.length) {
+    box.insertAdjacentHTML('afterbegin',`<p><button id="refresh-receipt">Review updated suggestions (${updates.length})</button></p>`);
+    $('#refresh-receipt').onclick=()=>reviewReceiptRefresh(r);
+  }
+  $('#approve-receipt').textContent = issues.length ? 'Review missing details' : 'Approve price updates';
+  $$('[data-fix-receipt]').forEach(button => button.onclick = () => {
+    const issue = issues[Number(button.dataset.fixReceipt)];
+    if (issue.field === 'date' || issue.field === 'supplier') $('#receipt-' + issue.field).focus();
+    else editPurchase(state.receipts.find(x => x.id === r.id), issue.field === 'line' ? issue.index : null);
+  });
+}
+function reviewReceiptRefresh(r) {
+  const proposals=M.receiptRefresh(state,r);
+  const summary=l=>`${state.ingredients.find(i=>i.id===l.ingredientId)?.name || l.description} · ${l.size ?? 'Quantity missing'} ${l.size ? l.unit : ''}${l.parseNote ? ' · '+l.parseNote : ''}`;
+  modal('Review updated suggestions',`<p>Select the changes to apply. Paid totals and confirmed purchases are retained. These remain drafts for review.</p>${proposals.map(p=>`<div class="purchase"><label class="inline"><input type="checkbox" name="refresh" value="${p.index}" checked>${esc(p.before.description)}</label><p class="small">Current: ${esc(summary(p.before))}</p><p>Suggested: ${esc(summary(p.after))}</p></div>`).join('')}`,async fd=>{
+    const current=state.receipts.find(x=>x.id===r.id);
+    const count=M.applyReceiptRefresh(current,proposals,fd.getAll('refresh').map(Number));
+    await save(count+' receipt suggestions updated. Check the purchases before approval.');
+  },'Apply selected suggestions');
+}
 function editPurchase(r, index = null) {
-  const l = index === null ? {
-    description: '',
-    ingredientId: '',
-    price: null,
-    size: null,
-    unit: '',
-    excluded: false
-  } : clone(r.lines[index]);
-  modal('Receipt purchase', `<label>Receipt description<input name="description" value="${esc(l.description)}"></label><label class="spacer">Match to ingredient / packaging<select name="ingredientId">${ingredientOptions(null, l.ingredientId)}</select></label><div class="fields three">${field('Paid package total ($)', 'price', l.price ?? '', 'number', 'min="0" step=".01"')}${field('Total quantity purchased', 'size', l.size ?? '', 'number', 'min="0.000001" step="any"')}${field('Quantity unit', 'unit', l.unit)}</div><label class="inline"><input name="excluded" type="checkbox" ${l.excluded ? 'checked' : ''}>Exclude personal item, refund or non-ingredient expense</label><label class="inline spacer"><input name="freeConfirmed" type="checkbox" ${l.freeConfirmed ? 'checked' : ''}>I confirm this purchase was free (only for a $0 price)</label>${index !== null ? '<label class="inline spacer"><input type="checkbox" name="remove">Remove this purchase line</label>' : ''}<p class="small">A 60-egg package uses quantity 60 and unit “each”. Two 1 kg bags use total quantity 2,000 and unit “g”.</p>`, async fd => {
-    r = state.receipts.find(x => x.id === r.id);
-    if (!r) throw Error('This receipt no longer exists.');
-    if (fd.get('remove')) r.lines.splice(index, 1);else {
-      for (const k of ['description', 'ingredientId', 'unit']) l[k] = String(fd.get(k)).trim();
-      l.price = num(fd.get('price'));
-      l.size = num(fd.get('size'));
-      l.excluded = !!fd.get('excluded');
-      l.freeConfirmed = !!fd.get('freeConfirmed');
-      if (index === null) r.lines.push(l);else r.lines[index] = l;
+  const l=index===null ? {description:'',ingredientId:'',price:null,size:null,unit:'',excluded:false} : clone(r.lines[index]);
+  const receiptSnapshot=JSON.stringify(r);
+  let productAction=null,pasteApplied=null;
+  l.id=l.id || M.uuid();
+  if(l.costing) {
+    const i=state.ingredients.find(i=>i.id===l.ingredientId),conversion=M.factor(l.costing.unit,i?.unit);
+    if(!M.costingApplies(r.supplier,l) || conversion===null) delete l.costing;
+    else {l.costing.packSize*=conversion;l.costing.unit=i.unit;}
+  }
+  const newId=M.uuid();
+  const body=[
+    l.parseNote && l.needsReview ? '<p class="small bad">'+esc(l.parseNote)+'</p>' : '',
+    field('Receipt description','description',l.description),
+    l.originalDescription && l.originalDescription!==l.description ? '<p class="small">Original: '+esc(l.originalDescription)+'</p>' : '',
+    '<div class="fields two">'+field('Product code (optional)','productCode',l.productCode || '')+'<label>Ingredient / packaging<select name="ingredientId">'+ingredientOptions(null,l.ingredientId)+'<option value="__new__">Add new ingredient…</option></select></label></div>',
+    '<div id="match-hints" class="small"></div>',
+    '<div id="remembered-product" class="spacer"></div>',
+    '<details class="spacer"><summary>Paste product details</summary><p class="small">Read a package description copied from its label or a retailer page. Confirm it belongs to this receipt product.</p><label>Product details<textarea name="productNotes" maxlength="10000" rows="3">'+esc(l.productNotes || l.productDetails || '')+'</textarea></label><button type="button" id="parse-product">Read package details</button><div id="paste-preview" role="status"></div></details>',
+    '<div id="new-purchase-ingredient" hidden><div class="fields two">'+field('New ingredient name','newName','')+field('Unit used in recipes','newUnit',l.unit || 'g')+'</div><p class="small">The new ingredient starts without a price. Approving this receipt supplies its first purchase cost.</p></div>',
+    '<div id="master-pack-reference" class="small spacer"></div>',
+    '<div class="fields three">'+field('Paid total ($)','price',l.price ?? '','number','min="0" step=".01"')+field('Size of one pack','packSize',l.packSize ?? '','number','min="0.000001" step="any"')+field('Number of packs','packageCount',l.packageCount ?? '','number','min="1" step="1"')+'</div>',
+    '<div class="fields two">'+field('Total quantity purchased','size',l.size ?? '','number','min="0.000001" step="any"')+field('Purchase unit','unit',l.unit)+'</div>',
+    '<p class="small" id="pack-calculation">Enter pack size and count, or the total quantity. Confirm the quantity against the package.</p>',
+    '<div id="recipe-quantity" hidden class="note"><strong>Quantity for recipes</strong><p id="recipe-quantity-help" class="small"></p><label><span id="recipe-pack-label">Usable quantity in one purchased pack</span><input name="costingPack" type="number" min="0.000001" step="any" value="'+(l.costing?.packSize ?? '')+'"></label><label class="inline"><input type="checkbox" name="costingConfirmed" '+(l.costing?.confirmed ? 'checked' : '')+'>I confirmed this quantity from the package or a measured usable amount.</label><p class="small" id="recipe-quantity-total"></p></div>',
+    '<label class="inline"><input name="excluded" type="checkbox" '+(l.excluded ? 'checked' : '')+'>Exclude this purchase from Ingredients</label><label class="inline spacer"><input name="freeConfirmed" type="checkbox" '+(l.freeConfirmed ? 'checked' : '')+'>This purchase was free</label>',
+    index!==null ? '<label class="inline spacer"><input type="checkbox" name="remove">Remove this purchase line</label>' : '',
+    '<p class="small">The product match, pack size and any confirmed recipe quantity are remembered after approval.</p>'
+  ].join('');
+  modal('Receipt purchase',body,async fd=>{
+    r=state.receipts.find(x=>x.id===r.id);
+    if(!r) throw Error('This receipt no longer exists.');
+    if(JSON.stringify(r)!==receiptSnapshot) throw Error('Receipt changed. Close this editor and reopen the purchase.');
+    if(fd.get('remove')) r.lines.splice(index,1);
+    else {
+      for(const k of ['description','ingredientId','unit','productCode']) l[k]=String(fd.get(k)).trim();
+      l.productCode=l.productCode.toUpperCase();
+      l.price=num(fd.get('price'));l.size=num(fd.get('size'));l.packSize=num(fd.get('packSize'));l.packageCount=num(fd.get('packageCount'));
+      if(l.packSize && l.packageCount) {
+        const total=l.packSize*l.packageCount;
+        if(l.size!==null && Math.abs(total-l.size)>.000001) throw Error('Pack size × number of packs must equal the total quantity.');
+        l.size=total;
+      } else if(M.positive(l.size)&&M.positive(l.packageCount)) l.packSize=l.size/l.packageCount;
+      l.excluded=!!fd.get('excluded');l.freeConfirmed=!!fd.get('freeConfirmed');
+      l.productNotes=String(fd.get('productNotes') || '').trim();
+      if(pasteApplied && (l.productNotes!==pasteApplied.text || l.packSize!==pasteApplied.packSize || l.unit!==pasteApplied.unit || l.productCode!==pasteApplied.code || l.ingredientId!==pasteApplied.ingredientId)) pasteApplied=null;
+      if(pasteApplied) {l.productDetails=pasteApplied.text;l.quantitySource='Pasted package, confirmed';}
+      else if(l.productDetails && (l.packSize!==r.lines[index]?.packSize || l.unit!==r.lines[index]?.unit || l.productCode!==r.lines[index]?.productCode)) {delete l.productDetails;l.quantitySource='Entered package';}
+      let newItem=null;
+      if(l.ingredientId==='__new__') {
+        l.ingredientId='';
+        if(!l.excluded) {
+          const name=String(fd.get('newName')).trim(),unit=String(fd.get('newUnit')).trim();
+          if(!name || !unit) throw Error('Enter a name and recipe unit for the new ingredient.');
+          if(state.ingredients.some(i=>M.normalized(i.name)===M.normalized(name))) throw Error('An ingredient with that name already exists. Select it from the list.');
+          newItem={id:newId,name,unit,kind:'ingredient',supplier:r.supplier,price:null,size:null,updated:'',history:[],notes:'',freeConfirmed:false};
+          l.ingredientId=newId;
+        }
+      }
+      const i=newItem || state.ingredients.find(i=>i.id===l.ingredientId);
+      delete l.costing;
+      if(!l.excluded && i && l.unit && M.factor(l.unit,i.unit)===null) {
+        const pack=num(fd.get('costingPack'));
+        if(pack!==null) {
+          if(!M.positive(pack)||!fd.get('costingConfirmed')) throw Error('Confirm the usable quantity for recipes in one purchased pack.');
+          if(!M.positive(l.packSize)||!Number.isInteger(l.packageCount)||l.packageCount<1) throw Error('Enter the purchase pack size and number of packs first.');
+          l.costing={ingredientId:i.id,retailer:M.retailerKey(r.supplier),productCode:l.productCode,purchasePackSize:l.packSize,purchaseUnit:l.unit,packSize:pack,unit:i.unit,confirmed:true};
+        }
+      }
+      l.needsReview=false;l.priceChangeConfirmed=true;l.reviewMode=true;
+      if(M.positive(l.size)&&M.positive(l.packSize)) l.quantityConflict=false;
+      if(productAction) {
+        if(!fd.get('confirmProductChange')) throw Error('Confirm the remembered-package change, or cancel it.');
+        M.changeSavedProduct(state,productAction.id,productAction.revision,productAction.change);
+      }
+      if(newItem) state.ingredients.push(newItem);
+      if(index===null) r.lines.push(l);else r.lines[index]=l;
     }
     await save('Receipt draft saved.');
   });
-  $('#dialog [name=ingredientId]').onchange = e => {
-    const i = state.ingredients.find(i => i.id === e.target.value);
-    if (i) {
-      $('#dialog [name=unit]').value = i.unit;
-      $('#dialog [name=size]').value = i.size ?? '';
+  const input=name=>$('#dialog [name='+name+']');
+  const chosen=()=>input('ingredientId').value==='__new__' ? {name:input('newName').value || 'New ingredient',unit:input('newUnit').value} : state.ingredients.find(i=>i.id===input('ingredientId').value);
+  const recipeQuantity=()=>{
+    const i=chosen(),unit=input('unit').value.trim(),show=!!i && !!unit && M.factor(unit,i.unit)===null && !input('excluded').checked;
+    $('#recipe-quantity').hidden=!show;
+    if(show) {
+      $('#recipe-quantity-help').textContent='The receipt uses '+unit+'. Recipes use '+i.unit+'. Confirm the usable recipe quantity in ONE purchased pack. This applies only to this product.';
+      $('#recipe-pack-label').textContent='Recipe quantity in one pack ('+i.unit+')';
+      const pack=num(input('costingPack').value),count=num(input('packageCount').value);
+      $('#recipe-quantity-total').textContent=M.positive(pack)&&M.positive(count) ? 'For recipes: '+pack+' '+i.unit+' × '+count+' packs = '+Number((pack*count).toFixed(8))+' '+i.unit+'.' : 'No count-to-weight or volume-to-weight conversion is assumed.';
     }
   };
+  const recalc=()=>{
+    const size=num(input('packSize').value),count=num(input('packageCount').value);
+    if(M.positive(size)&&M.positive(count)) {
+      input('size').value=size*count;
+      $('#pack-calculation').textContent=size+' × '+count+' = '+Number((size*count).toFixed(8))+' total.';
+    }
+    recipeQuantity();
+  };
+  const context=()=>{
+    const isNew=input('ingredientId').value==='__new__',i=chosen();
+    $('#new-purchase-ingredient').hidden=isNew ? false : true;
+    $('#master-pack-reference').innerHTML=!isNew && i && M.positive(i.size) ? '<p>Previous purchase in Ingredients: '+i.size+' '+esc(i.unit)+(i.supplier ? ' · '+esc(i.supplier) : '')+'. Use this only if it represents one pack of this product.</p>'+(!input('unit').value || M.factor(i.unit,input('unit').value)!==null ? '<button type="button" id="use-master-pack">Use this quantity for one pack</button>' : '') : '';
+    if($('#use-master-pack')) $('#use-master-pack').onclick=()=>{
+      if(!input('unit').value) input('unit').value=i.unit;
+      input('packSize').value=Number((i.size*M.factor(i.unit,input('unit').value)).toFixed(8));
+      if(!input('packageCount').value) input('packageCount').value='1';
+      recalc();
+    };
+    recipeQuantity();
+  };
+  input('packSize').oninput=()=>{input('costingConfirmed').checked=false;recalc();};
+  input('packageCount').oninput=recalc;
+  input('unit').oninput=()=>{input('costingConfirmed').checked=false;context();};
+  input('costingPack').oninput=()=>{input('costingConfirmed').checked=false;recipeQuantity();};
+  input('excluded').onchange=recipeQuantity;
+  input('newUnit').oninput=context;
+  input('ingredientId').onchange=()=>{
+    input('costingPack').value='';input('costingConfirmed').checked=false;
+    const i=chosen();if(i&&!input('unit').value) input('unit').value=i.unit;
+    context();
+  };
+  const showMatches=()=>{
+    const match=M.matchIngredient(state,r.supplier,input('description').value,input('productCode').value.toUpperCase());
+    const ids=[...new Set([match.ingredientId,...match.candidates.map(x=>x.ingredientId)].filter(Boolean))];
+    $('#match-hints').innerHTML=ids.length ? esc(match.reason)+': '+ids.map(id=>'<button type="button" class="receipt-fix" data-match="'+esc(id)+'">'+esc(state.ingredients.find(i=>i.id===id)?.name)+'</button>').join(' · ') : 'Choose an existing ingredient, add a new one, or exclude this purchase.';
+    $$('[data-match]').forEach(b=>b.onclick=()=>{input('ingredientId').value=b.dataset.match;input('ingredientId').dispatchEvent(new Event('change'));});
+    showRemembered(match.saved);
+  };
+  const showRemembered=saved=>{
+    productAction=null;
+    const area=$('#remembered-product');
+    if(!saved) {area.innerHTML='';return;}
+    const provenance=saved.provenance || {};
+    area.innerHTML='<details><summary>Remembered product details</summary><p>'+esc(provenance.source || 'Earlier saved match')+(provenance.date ? ' · '+esc(provenance.date) : ' · confirmation date unknown')+'</p>'+
+      (saved.requiresConfirmation ? '<p class="small">This saved package needs confirmation because its product or package details are uncertain. It will not fill future quantities until confirmed.</p>' : '')+
+      (provenance.confirmedAt ? '<p class="small">Confirmed '+esc(new Date(provenance.confirmedAt).toLocaleString())+'</p>' : '')+
+      (provenance.receiptId ? '<p class="small">Source receipt: '+esc(state.receipts.find(x=>x.id===provenance.receiptId)?.originalName || provenance.receiptId)+'</p>' : '')+
+      (provenance.text ? '<p class="small">'+esc(provenance.text)+'</p>' : '')+
+      '<p>Package: '+(saved.packSize ? saved.packSize+' '+esc(saved.unit) : 'Not confirmed')+'</p>'+
+      (saved.costing ? '<p>For recipes: '+saved.costing.packSize+' '+esc(saved.costing.unit)+' per pack, confirmed</p>' : '')+
+      '<div class="fields two">'+field('Remembered pack size','rememberedPack',saved.packSize || '','number','min="0.000001" step="any"')+field('Remembered purchase unit','rememberedUnit',saved.unit)+'</div>'+
+      '<div class="actions"><button type="button" id="review-remembered">Review saved change</button><button type="button" id="forget-product">Forget this match</button></div><div id="remembered-preview" role="status"></div><p class="small">Saved changes affect future suggestions. Current prices and this purchase stay unchanged. Correcting or forgetting a package clears its remembered recipe conversion. Save this purchase to apply; Cancel discards these changes. Settings → Undo can reverse a saved change.</p></details>';
+    const stage=forget=>{
+      const change=forget ? {forget:true} : {packSize:num(input('rememberedPack').value),unit:input('rememberedUnit').value.trim()};
+      productAction={id:saved.id,revision:saved.revision,change};
+      $('#remembered-preview').innerHTML='<p>'+(forget ? 'Stop reusing this product match and its package?' : 'Remembered package: '+esc(saved.packSize || 'unknown')+' '+esc(saved.unit)+' → '+esc(change.packSize)+' '+esc(change.unit))+'</p><label class="inline"><input type="checkbox" name="confirmProductChange">Confirm this change when saving</label><button type="button" id="cancel-product-change">Cancel saved change</button>';
+      $('#cancel-product-change').onclick=()=>{productAction=null;$('#remembered-preview').innerHTML='';};
+    };
+    $('#review-remembered').onclick=()=>stage(false);$('#forget-product').onclick=()=>stage(true);
+    for(const name of ['rememberedPack','rememberedUnit']) input(name).oninput=()=>{productAction=null;$('#remembered-preview').innerHTML='';};
+  };
+  $('#parse-product').onclick=()=>{
+    const result=M.parseProductDescription(input('productNotes').value),area=$('#paste-preview');
+    if(!result.ok) {area.textContent=result.message;return;}
+    const code=input('productCode').value.trim().toUpperCase(),ingredientId=input('ingredientId').value;
+    area.innerHTML='<p>One purchased package: '+(result.innerCount!==1 ? result.size+' '+esc(result.unit)+' × '+result.innerCount+' inside the package = ' : '')+'<strong>'+result.packSize+' '+esc(result.unit)+'</strong>.</p>'+(result.dimension==='volume' ? '<p class="small">US volume measures. No weight conversion is assumed.</p>' : '')+'<p class="small">Current pack: '+esc(input('packSize').value || 'unknown')+' '+esc(input('unit').value)+'. The receipt’s number of purchased packages stays unchanged.</p><label class="inline"><input type="checkbox" id="confirm-paste">I checked that this product and package match the receipt.</label><button type="button" id="apply-paste">Apply to this draft</button>';
+    $('#apply-paste').onclick=()=>{
+      if(!$('#confirm-paste').checked) {notice('Confirm the product and package before applying.',true);return;}
+      if(input('productNotes').value.trim()!==result.text || input('productCode').value.trim().toUpperCase()!==code || input('ingredientId').value!==ingredientId) {area.textContent='Details changed. Read the package details again.';return;}
+      input('packSize').value=result.packSize;input('unit').value=result.unit;
+      if(!input('packageCount').value) input('packageCount').value='1';
+      input('costingPack').value='';input('costingConfirmed').checked=false;
+      pasteApplied={...result,code,ingredientId};recalc();context();
+      area.textContent='Applied to this draft. Save the purchase, then approve the receipt to update Ingredients.';
+    };
+  };
+  input('description').oninput=showMatches;
+  input('productCode').oninput=()=>{input('costingConfirmed').checked=false;showMatches();};
+  showMatches();context();
 }
 function suggestPurchases(r) {
-  const candidates = [];
-  for (const line of r.text.split('\n')) {
-    const match = line.match(/^(.+?)\s+\$?(-?\d+[.,]\d{2})\s*[A-Z]?$/);
-    if (!match || /total|tax|cash|change|balance|visa|mastercard|payment|saving|discount|coupon/i.test(match[1])) continue;
-    const description = match[1].trim(),
-      price = Number(match[2].replace(',', '.'));
-    if (r.lines.some(l => l.description === description) || candidates.some(l => l.description === description)) continue;
-    const mapped = state.mappings[M.normalized(r.supplier) + '|' + M.normalized(description)];
-    candidates.push({
-      description,
-      price: price >= 0 ? price : null,
-      ingredientId: mapped?.ingredientId || '',
-      size: mapped?.size ?? null,
-      unit: mapped?.unit || '',
-      excluded: price < 0
-    });
-  }
-  if (!candidates.length) {
-    notice('No clear item-and-price lines found. Add purchases manually using the original receipt.');
+  const proposals = M.receiptReconciliation(state, r),before=JSON.stringify(r);
+  if (!proposals.length) {
+    notice('No additional item-and-price lines found. Existing purchases are already included; add any missing item from the original receipt.');
     return;
   }
-  modal('Review candidate lines', `<p>These ${candidates.length} lines were read from the receipt. They are unapproved drafts; check each against the original.</p><ul>${candidates.map(l => `<li>${esc(l.description)} · ${money(l.price)}${l.ingredientId ? ' · saved match' : ''}</li>`).join('')}</ul>`, async () => {
+  modal('Review candidate lines', `<p>Check whether each recognized purchase is new or already included. Linking keeps your entered amounts; different totals need review.</p>${proposals.map(({candidate:l,possible},n)=>`<label>${esc(l.description)} · ${money(l.price)} · ${l.packageCount} pack(s)<select name="reconcile-${n}">${possible.length ? '<option value="">Choose new or already included…</option>' : ''}<option value="add">Add as a new purchase</option>${r.lines.map((old,i)=>`<option value="${i}">Already included: ${i+1}. ${esc(old.description)} · ${money(old.price)}</option>`).join('')}</select></label>`).join('')}`, async fd => {
     r = state.receipts.find(x => x.id === r.id);
-    r.lines.push(...candidates);
+    M.applyReconciliation(r,proposals,proposals.map((_,n)=>String(fd.get('reconcile-'+n))),before);
     await save('Candidate lines added. Confirm matches, quantities and prices.');
   }, 'Add draft lines');
 }
 function settingsPage() {
-  $('#main').innerHTML = `<h1>Settings</h1><p class="sub">Shared costing defaults and your local records.</p><div class="two"><div class="pane"><h3>Pricing and cost alerts</h3><form id="settings-form"><div class="fields two">${field('Labour rate ($ / hour)', 'laborRate', state.settings.laborRate, 'number', 'min="0" step=".01" required')}${field('Retail markup (%)', 'retailMarkup', state.settings.retailMarkup ?? '', 'number', 'min="0" step="any"')}${field('Bulk markup (%)', 'bulkMarkup', state.settings.bulkMarkup ?? '', 'number', 'min="0" step="any"')}${field('Cost increase alert (%)', 'alertPercent', state.settings.alertPercent, 'number', 'min="0" step="any" required')}${field('Review purchase prices after (days)', 'staleDays', state.settings.staleDays, 'number', 'min="1" step="1" required')}</div><p class="small">Markup is added to cost: $10 cost + 50% markup = $15 selling price. Margin at $15 is 33.3%.</p><button class="primary">Save settings</button></form></div><div class="pane"><h3>Receipt folder</h3><p class="small">Choose the “All new receipts” folder used by the iPhone shortcut. While the app is open, new receipts are detected every 15 seconds and when you return to the app. Arriving iCloud files are retried after download. Prices still require your approval.</p><p id="inbox-path" class="ocr">${esc(inbox || 'No folder selected')}</p><button id="choose-inbox">Choose folder</button><h3 class="spacer">Backups and undo</h3><div class="actions"><button id="backup">Save full backup</button><button id="restore">Restore backup</button><button id="undo">Undo last saved change</button></div><p class="small spacer">A full backup includes your records and original receipts. Save a copy to iCloud Drive or another safe location. The live database stays on this Mac. Up to 30 saved changes can be undone.</p><button id="show-folder">Show local data folder</button></div></div><div class="pane"><h3>Excel fallback</h3><p>Export an editable workbook with formulas, ingredients, recipes, packaging, labour, pricing settings and your price list. Reimport a workbook exported by this app to review input changes before applying them.</p><div class="actions"><button id="export-all">Export all to Excel</button><button id="import-excel">Review Excel import</button></div></div><div class="pane"><h3>About this first version</h3><p class="small">Local Mac app · no paid server or AI account · receipt recognition runs on this Mac. Square sales, business-profitability reports and seasonal forecasting are not included in this version. Costing labour is an allowance for pricing, not a business-profit calculation.</p></div>`;
+  $('#main').innerHTML = `<h1>Settings</h1><p class="sub">Shared costing defaults and your local records.</p><div class="two"><div class="pane"><h3>Pricing and cost alerts</h3><form id="settings-form"><div class="fields two">${field('Labour rate ($ / hour)', 'laborRate', state.settings.laborRate, 'number', 'min="0" step=".01" required')}${field('Retail markup (%)', 'retailMarkup', state.settings.retailMarkup ?? '', 'number', 'min="0" step="any"')}${field('Bulk markup (%)', 'bulkMarkup', state.settings.bulkMarkup ?? '', 'number', 'min="0" step="any"')}${field('Cost increase alert (%)', 'alertPercent', state.settings.alertPercent, 'number', 'min="0" step="any" required')}${field('Review purchase prices after (days)', 'staleDays', state.settings.staleDays, 'number', 'min="1" step="1" required')}</div><p class="small">Markup is added to cost: $10 cost + 50% markup = $15 selling price. Margin at $15 is 33.3%.</p><button class="primary">Save settings</button></form></div><div class="pane"><h3>Receipt folder</h3><p class="small">Choose the “All new receipts” folder used by the iPhone shortcut. While the app is open, new receipts are detected every 15 seconds and when you return to the app. Arriving iCloud files are retried after download. Prices still require your approval.</p><p id="inbox-path" class="ocr">${esc(inbox || 'No folder selected')}</p><div class="pickup-status small" data-pickup-status></div><button id="choose-inbox">Choose folder</button><h3 class="settings-section">Backups and undo</h3><div class="actions"><button id="backup">Save full backup</button><button id="restore">Restore backup</button><button id="undo">Undo last saved change</button></div><p class="small spacer">A full backup includes your records and original receipts. Save a copy to iCloud Drive or another safe location. The live database stays on this Mac. Up to 30 saved changes can be undone.</p><button id="show-folder">Show local data folder</button></div></div><div class="pane"><h3>Excel import and export</h3><p>Export an editable workbook with formulas, ingredients, recipes, packaging, labour, pricing settings and your price list. Import supports this app’s Excel template only. Export a workbook first, edit its Ingredients, Recipes and Lines sheets, then import it to review changes. Separate recipe-sheet layouts are not supported.</p><div class="actions"><button id="export-all">Export all to Excel</button><button id="import-excel">Review Excel import</button></div></div><div class="pane"><h3>About this app</h3><p id="app-version">${appVersion ? `Version ${esc(appVersion.version)} · Build ${esc(appVersion.build)}` : 'Version unavailable'}</p><p class="small">Local Mac app · no paid server or AI account · receipt recognition runs on this Mac. Square sales, business-profitability reports and seasonal forecasting are not included in this version. Costing labour is an allowance for pricing, not a business-profit calculation.</p></div>`;
+  renderPickupStatus();
+  if (settingsDraft) for (const [name, value] of Object.entries(settingsDraft)) $('#settings-form [name="' + name + '"]').value = value;
+  $('#settings-form').oninput = () => { settingsDraft = Object.fromEntries(new FormData($('#settings-form'))); };
   $('#settings-form').onsubmit = async e => {
     e.preventDefault();
     const fd = new FormData(e.target);
     for (const key of ['laborRate', 'retailMarkup', 'bulkMarkup', 'alertPercent', 'staleDays']) state.settings[key] = num(fd.get(key));
     try {
-      await save('Settings saved. Suggested prices recalculated.');
+      const draft = settingsDraft;
+      settingsDraft = null;
+      try { await save('Settings saved. Suggested prices recalculated.'); }
+      catch (error) { settingsDraft = draft; if (currentTab === 'settings') settingsPage(); throw error; }
     } catch {}
   };
   action('#choose-inbox', async () => {
     const path = await native('chooseInbox');
     if (path) {
       inbox = path;
+      pickupStatus = null;
       settingsPage();
       checkInboxAutomatically();
     }
@@ -822,7 +1113,8 @@ function settingsPage() {
     await saveTail;
     dataEpoch++;
     const restored = await native('undo');
-    state = M.validate(restored);
+    settingsDraft = null;
+    state = M.normalizeState(restored);
     lastSaved = clone(state);
     render();
     notice('Last saved change undone.');
@@ -851,7 +1143,8 @@ async function restoreBackup() {
     modal('Restore this bakery backup?', `<p>Replace current records with ${restored.recipes.length} recipes, ${restored.ingredients.length} master items and ${restored.receipts.length} receipts from this backup.</p><p>Save a full backup of your current bakery first if you want to retain it separately. This restore can also be undone.</p>`, async () => {
       await saveTail;
       dataEpoch++;
-      state = M.validate(await native('restoreBackup'));
+      state = M.normalizeState(await native('restoreBackup'));
+      settingsDraft = null;
       lastSaved = clone(state);
       render();
       notice('Backup restored.');
@@ -874,7 +1167,7 @@ function importCandidate(tables) {
     Settings: ['Setting', 'Value']
   };
   for (const [name, required] of Object.entries(headers)) {
-    if (!Array.isArray(tables[name]) || required.some((h, i) => tables[name][0]?.[i] !== h)) throw Error('The ' + name + ' sheet does not match this version of the app’s export template.');
+    if (!Array.isArray(tables[name]) || required.some((h, i) => tables[name][0]?.[i] !== h)) throw Error('Unsupported Excel layout: the ' + name + ' sheet headers do not match the app’s template. Export a fresh template from Settings → Excel import and export. No records were changed.');
     const inputs = name === 'Ingredients' ? [0, 1, 2, 3, 4, 5, 6, 7, 9] : required.map((_, i) => i);
     for (const row of tables[name].slice(1)) for (const i of inputs) if (row[i] && typeof row[i] === 'object') throw Error('Input formulas are not supported for reimport: ' + name + '. Replace input formulas with values.');
   }
@@ -1032,6 +1325,7 @@ async function importExcel() {
     const errors = candidate.recipes.flatMap(r => M.calculate(candidate, r).errors.map(e => r.name + ': ' + e));
     modal('Review Excel import', `<div class="line"><span>Changed master items</span><strong>${s.ingredients}</strong></div><div class="line"><span>New master items</span><strong>${s.newIngredients}</strong></div><div class="line"><span>Existing recipes to replace from workbook</span><strong>${s.recipes}</strong></div><div class="line"><span>New recipes</span><strong>${s.newRecipes}</strong></div><div class="line"><span>Changed settings</span><strong>${s.settings}</strong></div><p class="small spacer">Records absent from the workbook stay in the app. Imported recipe lines replace that recipe’s current lines. Receipt history is retained.</p>${errors.length ? `<div class="note">${errors.length} incomplete cost checks remain.<ul>${errors.slice(0, 12).map(e => `<li>${esc(e)}</li>`).join('')}</ul></div>` : ''}`, async () => {
       state = candidate;
+      settingsDraft = null;
       await save('Excel input changes imported.');
     }, 'Apply reviewed import');
   });
@@ -1042,11 +1336,34 @@ window.HeidyApp = {
   importCandidate
 };
 // Start native application.
+$('#nav-toggle').onclick = () => {
+  const collapsed = document.body.classList.toggle('nav-collapsed');
+  $('#nav-toggle').setAttribute('aria-expanded', String(!collapsed));
+  $('#nav-toggle').textContent = collapsed ? 'Show navigation' : 'Hide navigation';
+};
+document.addEventListener('input', e => {
+  if (e.target.closest('#main .filters, .recipe-picker')) rememberView();
+});
+document.addEventListener('change', e => {
+  if (e.target.closest('#main .filters, .recipe-picker')) rememberView();
+});
+$('.workspace').addEventListener('scroll', () => { (viewState[currentTab] ||= {fields:{}}).top = $('.workspace').scrollTop; }, {passive:true});
+document.addEventListener('scroll', e => {
+  if (e.target.matches?.('#main .scroll')) (viewState[currentTab] ||= {fields:{}}).scrolls = $$('#main .scroll').map(el => [el.scrollLeft, el.scrollTop]);
+}, {capture:true, passive:true});
+let modalFocus = null;
+document.addEventListener('click', e => { if (!$('#dialog').open) modalFocus = e.target.closest('button'); }, true);
+$('#dialog').addEventListener('close', () => {
+  if (modalFocus?.isConnected) modalFocus.focus();
+  else $('[data-tab="' + currentTab + '"]').focus();
+});
 (async () => {
   try {
     const result = await native('load');
     seed = result.seed;
     inbox = result.inbox;
+    appVersion = result.appVersion || null;
+    pickupStatus = result.inboxStatus || null;
     let migrated = false;
     if (result.state) {
       const vanilla = result.state.ingredients?.find(i => i.name === 'Vanilla Paste' && i.updated === '2029-08-31');
@@ -1055,9 +1372,12 @@ window.HeidyApp = {
         migrated = true;
       }
     }
-    state = result.state ? M.validate(result.state) : M.empty();
+    state = result.state ? M.normalizeState(result.state) : M.empty();
     lastSaved = result.state ? clone(state) : null;
+    let prepared = 0;
+    for (const r of state.receipts) if (M.prepareReceipt(state, r)) prepared++;
     $('#save-status').textContent = 'Stored on this Mac';
+    if (prepared) { await save('Receipt drafts prepared from recognized text. Review the suggested details.'); migrated = false; }
     if (migrated) await save('Corrected the known Vanilla Paste purchase date typo.');else render();
     startInboxChecks();
   } catch (e) {

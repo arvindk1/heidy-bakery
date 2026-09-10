@@ -2,7 +2,8 @@
   "name": "heidy-bakery",
   "private": true,
   "scripts": {
-    "test": "node Tests/model.test.cjs && node Tests/regression.test.cjs && node Tests/margin-watch.test.cjs",
-    "build": "bash build.sh"
+    "test": "node Tests/model.test.cjs && node Tests/regression.test.cjs && node Tests/receipts.test.cjs && node Tests/receipt-learning.test.cjs && node Tests/receipt-parsing.test.cjs && node Tests/receipt-products.test.cjs && node Tests/saved-products.test.cjs && node Tests/margin-watch.test.cjs && node Tests/refresh-contrast.test.cjs",
+    "build": "bash build.sh",
+    "test:ui": "node Tests/ui-regression.cjs && node Tests/receipt-ui.test.cjs && node Tests/receipt-products-ui.test.cjs && node Tests/saved-products-ui.test.cjs && node Tests/excel-ui.test.cjs"
   }
 }

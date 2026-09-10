@@ -32,3 +32,9 @@ HeidyBakery/final_test_data/
 
 # Private bakery data — real suppliers and prices. Never commit.
 HeidyBakery/Resources/seed.json
+
+# Private/secret files — never commit.
+docs/secrets/
+
+# Local pre-pull safety snapshots — not part of the tracked history.
+_backup-pre-pull-*/

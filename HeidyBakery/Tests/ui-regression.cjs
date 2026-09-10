@@ -15,7 +15,7 @@ let testBrowser;
  ingredient.history.push({supplier:'S',price:5.29,date:'',note:'no size recorded',receiptId:'missing-receipt'});
  ingredient.history.push({supplier:'Test shop',price:4,date:'2026-08-02',note:'Original',receiptId:historyTarget});
  const recent=makeReceipt('recent','2026-09-07');saved.receipts.push(recent);M.validate(saved);
- let history=[],failNext=false,folderRecords=[],scans=0,opened='';
+ let history=[],failNext=false,folderRecords=[],scans=0,opened='',chosenFolder='/isolated/test-receipts';
  const browser=testBrowser=await chromium.launch({headless:true,channel:'chrome'});
  const page=await browser.newPage({viewport:{width:1200,height:850}}),errors=[];
  page.on('pageerror',e=>errors.push(e.message));
@@ -24,7 +24,7 @@ let testBrowser;
    case'load':result={state:clone(saved),seed:require('../Resources/seed.json'),inbox:''};break;
    case'save':await new Promise(r=>setTimeout(r,20));if(failNext){failNext=false;throw Error('Simulated disk full')}M.validate(payload);history.push(clone(saved));saved=clone(payload);result=true;break;
    case'undo':if(!history.length)throw Error('Nothing to undo');saved=history.pop();result=clone(saved);break;
-   case'chooseInbox':result='/isolated/test-receipts';break;
+   case'chooseInbox':if(chosenFolder instanceof Error)throw chosenFolder;result=chosenFolder;break;
    case'scanInbox':scans++;result={records:clone(folderRecords),errors:[],duplicates:0,pending:0};break;
    case'importReceipts':result={records:[clone(saved.receipts[0])],errors:[],duplicates:0,pending:0};break;
    case'previewReceipt':result='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZ1cAAAAASUVORK5CYII=';break;
@@ -61,7 +61,7 @@ let testBrowser;
  assert.ok(!(await page.locator('#notice').textContent()).includes('UNRELATED OLD REVIEW'));
  await page.evaluate(id=>openReceiptRecord(id),historyTarget);
  await page.locator('#approve-receipt').click();await page.locator('#dialog-submit').click();await page.locator('#dialog').waitFor({state:'hidden'});
- assert.ok((await page.locator('#notice').textContent()).includes('master price was not changed'));
+ assert.ok((await page.locator('#notice').textContent()).includes('older purchases saved to history'));
  assert.ok(!(await page.locator('#notice').textContent()).includes('UNRELATED OLD REVIEW'));
  const undoBefore=history.length;await page.locator('#add-receipts').click();assert.equal(history.length,undoBefore,'duplicate receipt checks preserve undo');
  // Failed line editing can be retried without losing the edited recipe reference.
@@ -74,6 +74,21 @@ let testBrowser;
  await page.locator('[data-tab=settings]').click();folderRecords=[makeReceipt('automatic')];const masterPrice=saved.ingredients.find(i=>i.id===ingredient.id).price;
  await page.locator('#choose-inbox').click();await page.waitForFunction(()=>HeidyApp.getState().receipts.some(r=>r.id==='automatic')&&document.querySelector('#save-status').textContent==='Saved on this Mac');
  assert.equal(saved.receipts.find(r=>r.id==='automatic').status,'Needs review');assert.equal(saved.ingredients.find(i=>i.id===ingredient.id).price,masterPrice);
+ // Folder selection cancellation/failure must preserve the current folder and data.
+ const previousFolder=await page.locator('#inbox-path').innerText(),beforeCancel=clone(saved);
+ chosenFolder=null;await page.locator('#choose-inbox').click();
+ assert.equal(await page.locator('#inbox-path').innerText(),previousFolder);assert.deepEqual(saved,beforeCancel);
+ chosenFolder=Error('Folder access unavailable');await page.locator('#choose-inbox').click();
+ assert.equal(await page.locator('#inbox-path').innerText(),previousFolder);assert.deepEqual(saved,beforeCancel);
+ // Switching while Settings has an unsaved draft keeps that draft and picks up the new source.
+ await page.locator('[name=laborRate]').fill('31');
+ chosenFolder='/isolated/second-receipts';folderRecords=[makeReceipt('second-folder')];
+ await page.locator('#choose-inbox').click();
+ await page.waitForFunction(()=>HeidyApp.getState().receipts.some(r=>r.id==='second-folder')&&document.querySelector('#save-status').textContent==='Saved on this Mac');
+ assert.equal(await page.locator('#inbox-path').innerText(),chosenFolder);
+ assert.equal(await page.locator('[name=laborRate]').inputValue(),'31');
+ assert.ok(saved.receipts.some(r=>r.id==='automatic'));assert.equal(saved.ingredients.find(i=>i.id===ingredient.id).price,masterPrice);
+ console.log('Folder UI checks passed: cancel/error preserve selection; A to B changes path and imports drafts; existing receipts, master prices and unsaved settings retained.');
  const savesBefore=history.length;await page.evaluate(()=>checkInboxAutomatically());assert.equal(history.length,savesBefore);
  const scansBefore=scans;await page.locator('[name=laborRate]').focus();await page.evaluate(()=>checkInboxAutomatically());assert.equal(scans,scansBefore,'automatic checks pause while editing');
  await page.locator('[data-tab=recipes]').click();
@@ -82,6 +97,58 @@ let testBrowser;
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:path.join(work,'recipe-dark-narrow.png'),fullPage:true});
  await page.locator('[data-tab=ingredients]').click();await page.locator('#ingredient-search').fill(ingredient.name);await page.locator('[data-ingredient="'+ingredient.id+'"]').click();
  await page.getByText(/^Purchase history \(/).click();await page.screenshot({path:path.join(work,'history-dark.png'),fullPage:true});
+
+ await page.locator('#dialog-cancel').click();
+ // Navigation restoration and unsaved settings must survive screen changes.
+ await page.locator('[data-tab=prices]').click();
+ await page.locator('#price-search').fill(saved.recipes[0].name);
+ await page.locator('[data-open-recipe]').first().click();
+ await page.locator('#back-view').click();
+ assert.equal(await page.locator('#price-search').inputValue(),saved.recipes[0].name);
+ await page.locator('[data-tab=settings]').click();
+ await page.locator('[name=laborRate]').fill('31.25');
+ await page.locator('[data-tab=ingredients]').click();
+ await page.locator('[data-tab=settings]').click();
+ assert.equal(await page.locator('[name=laborRate]').inputValue(),'31.25');
+ assert.notEqual(saved.settings.laborRate,31.25,'draft must not silently persist');
+ await page.locator('#settings-form button').click();
+ await page.waitForFunction(()=>document.querySelector('#save-status').textContent==='Saved on this Mac');
+ assert.equal(saved.settings.laborRate,31.25);
+ // Both selling prices remain editable across navigation and actual save acknowledgements.
+ await page.locator('[data-tab=prices]').click();await page.locator('#price-search').fill('');
+ for(const [kind,value] of [['retail','9.75'],['bulk','7.25']]) {
+   await page.locator('[data-price-kind='+kind+']').first().fill(value);
+   await page.locator('[data-tab=ingredients]').click();
+   await page.waitForFunction(()=>document.querySelector('#save-status').textContent==='Saved on this Mac');
+   assert.equal(saved.recipes[0][kind],Number(value));
+   await page.locator('[data-tab=prices]').click();
+ }
+ // Copy and delete keep existing dialogs and persistence contracts.
+ await page.locator('[data-open-recipe]').first().click();
+ const originalCount=saved.recipes.length;
+ await page.locator('#copy-recipe').click();
+ await page.locator('[name=name]').fill('Refresh verification copy');
+ await page.locator('#dialog-submit').click();await page.locator('#dialog').waitFor({state:'hidden'});
+ assert.equal(saved.recipes.length,originalCount+1);
+ await page.locator('#delete-recipe').click();await page.locator('#dialog-submit').click();
+ await page.locator('#dialog').waitFor({state:'hidden'});assert.equal(saved.recipes.length,originalCount);
+ const expectedTabs=['prices','recipes','ingredients','receipts','margin-watch','settings'];
+ assert.deepEqual(await page.locator('[data-tab]').evaluateAll(nodes=>nodes.map(n=>n.dataset.tab)),expectedTabs);
+ for(const mode of ['light','dark']) {
+   await page.emulateMedia({colorScheme:mode});
+   for(const width of [760,1100,1440]) {
+     await page.setViewportSize({width,height:900});
+     for(const destination of expectedTabs) {
+       await page.locator('[data-tab="'+destination+'"]').click();
+       assert.equal(await page.locator('[aria-current=page]').getAttribute('data-tab'),destination);
+       assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth && document.querySelector('.workspace').scrollWidth<=document.querySelector('.workspace').clientWidth),'no window overflow: '+destination+' '+width);
+       await page.screenshot({path:path.join(work,destination+'-'+mode+'-'+width+'.png')});
+     }
+   }
+ }
+ await page.locator('#nav-toggle').click();assert.equal(await page.locator('#app-nav').isVisible(),false);
+ await page.locator('#nav-toggle').click();assert.equal(await page.locator('#app-nav').isVisible(),true);
+ console.log('Refresh checks passed: back navigation, filter retention, settings drafts, retail/bulk persistence, copy/delete, all six screens at 760/1100/1440px in both appearances.');
  assert.deepEqual(errors,[]);await browser.close();
  console.log('UI regressions passed: bulk/labour/cost-review controls, legacy history, correct receipt paging/search/toasts, save retry, duplicate undo, automatic draft pickup, and narrow dark layout.');
 })().catch(async e=>{console.error(e);if(testBrowser)await testBrowser.close();process.exitCode=1});

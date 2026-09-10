@@ -172,12 +172,12 @@ const invalid = {
     excluded: false
   }]
 };
-assert.throws(() => M.approveReceipt(s, invalid), /Confirm/);
+assert.throws(() => M.approveReceipt(s, invalid), /quantity and unit/);
 assert.equal(s.ingredients[0].price, 20);
 const duplicate = clone(newer);
 duplicate.status = 'Needs review';
 duplicate.lines.push(clone(duplicate.lines[0]));
-assert.throws(() => M.approveReceipt(s, duplicate), /Combine/);
+assert.throws(() => M.approveReceipt(s, duplicate), /combine repeated/);
 const unknown = clone(s);
 unknown.recipes[0].yield = 0;
 assert.throws(() => M.validate(unknown), /Invalid recipe/);
