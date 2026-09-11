@@ -325,6 +325,15 @@
             !Array.isArray(v.ingredientIds) || v.ingredientIds.some(id => !named(id))) throw Error('Invalid receipt approval summary.');
       }
     }
+    if(s.maintenanceNotices!=null && (!Array.isArray(s.maintenanceNotices) || s.maintenanceNotices.some(n=>!text(n)))) throw Error('Invalid library maintenance notices.');
+    // Saved suggestions can outlive an ingredient. They must not block opening
+    // the library, but recipe and receipt references above remain strict.
+    const removed=new Set(),notices=[];
+    const orphan=v=>object(v) && named(v.ingredientId) && !ingredientIds.has(v.ingredientId);
+    for(const [key,v] of Object.entries(s.mappings)) if(orphan(v)) {delete s.mappings[key];notices.push('Removed saved match '+key+': its ingredient is missing. Review the match on a future receipt.');}
+    if(object(s.products?.records)) for(const [id,v] of Object.entries(s.products.records)) if(orphan(v)) {delete s.products.records[id];removed.add(id);notices.push('Removed saved product '+(v.productCode || id)+': its ingredient is missing. Review the match on a future receipt.');}
+    if(removed.size && object(s.products?.aliases)) for(const [key,ids] of Object.entries(s.products.aliases)) if(Array.isArray(ids)) {s.products.aliases[key]=ids.filter(id=>!removed.has(id));if(!s.products.aliases[key].length) delete s.products.aliases[key];}
+    if(notices.length) s.maintenanceNotices=[...new Set([...(s.maintenanceNotices || []),...notices])];
     for (const v of Object.values(s.mappings)) if (!object(v) || !ingredientIds.has(v.ingredientId) || !positive(v.size) || !named(v.unit) || v.packSize != null && !positive(v.packSize)) throw Error('Invalid saved receipt match.');
     for (const v of Object.values(s.mappings)) if (v.costing != null && !validCosting(v.costing)) throw Error('Invalid saved recipe quantity.');
     const validPackCount=v=>v.packageCount==null || Number.isSafeInteger(v.packageCount) && v.packageCount>0 && positive(v.packSize) && Math.abs(v.size-v.packSize*v.packageCount)<1e-6;

@@ -1154,6 +1154,7 @@ function settingsPage() {
       checkInboxAutomatically();
     }
   });
+  if(state.maintenanceNotices?.length) $('#main').insertAdjacentHTML('beforeend','<div class="note" id="maintenance-notices"><h3>Saved matches need review</h3><ul>'+state.maintenanceNotices.map(n=>'<li>'+esc(n)+'</li>').join('')+'</ul></div>');
   action('#backup', () => busy('Saving complete backup…', async () => {
     await saveTail;
     const p = await native('backup');
@@ -1431,6 +1432,7 @@ $('#dialog').addEventListener('close', () => {
     if (prepared) { await save('Receipt drafts prepared from recognized text. Review the suggested details.'); migrated = false; }
     if (migrated) await save('Corrected the known Vanilla Paste purchase date typo.');else render();
     startInboxChecks();
+    if(state.maintenanceNotices?.length) notice('Some saved product matches referred to missing ingredients and were removed from suggestions. See Settings for details.',true);
   } catch (e) {
     $('#main').innerHTML = `<div class="note bad">${esc(e.message)}</div>`;
     $('#save-status').textContent = 'Could not open records';

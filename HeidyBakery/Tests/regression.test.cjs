@@ -119,8 +119,8 @@ const tables = s => Object.fromEntries(M.workbook(s).sheets.map(x => [x.name, cl
   for (const change of [s => s.recipes[0].lines[0].perPiece = 'false', s => s.ingredients[0].updated = '2026-02-30', s => s.recipes[0].bulkMin = .5, s => s.receipts.push({
     id: 'bad'
   }), s => s.mappings.bad = {
-    ingredientId: 'ghost',
-    size: 1,
+    ingredientId: s.ingredients[0].id,
+    size: -1,
     unit: 'g'
   }]) {
     const s = fixture();

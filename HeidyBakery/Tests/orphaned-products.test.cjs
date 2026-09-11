@@ -1,0 +1,9 @@
+const assert=require('node:assert/strict'),M=require('../Resources/model.js'),{fixture}=require('./receipt-product-fixture.cjs'),clone=x=>JSON.parse(JSON.stringify(x));
+const s=fixture(),good={ingredientId:'butter',packSize:100,size:200,unit:'g'};s.mappings={'costco|sku:384962':good,'costco|butter':clone(good)};M.normalizeState(s);
+const p=M.savedProduct(s,'Costco','','384962');s.products.records.orphan={...clone(p),id:'orphan',productCode:'missing',ingredientId:'deleted',forgotten:true};s.products.aliases['costco|mixed']=[p.id,'orphan'];s.products.aliases['costco|gone']=['orphan'];s.mappings['costco|sku:missing']={...good,ingredientId:'deleted'};
+const ingredients=clone(s.ingredients),recipes=clone(s.recipes),receipts=clone(s.receipts);M.validate(s);assert.equal(s.products.records.orphan,undefined);assert.deepEqual(s.products.aliases['costco|mixed'],[p.id]);assert.equal(s.products.aliases['costco|gone'],undefined);assert.equal(s.mappings['costco|sku:missing'],undefined);assert.ok(s.maintenanceNotices.length);assert.deepEqual(s.ingredients,ingredients);assert.deepEqual(s.recipes,recipes);assert.deepEqual(s.receipts,receipts);
+const once=JSON.stringify(s);M.normalizeState(s);assert.equal(JSON.stringify(s),once,'Repair not idempotent');assert.equal(M.savedProduct(s,'Costco','','384962').ingredientId,'butter');
+const legacy=fixture();legacy.mappings={'gfs|unknown':{...good,ingredientId:'deleted'}};M.normalizeState(legacy);assert.deepEqual(legacy.mappings,{});assert.ok(legacy.maintenanceNotices.length);
+const broken=clone(s);broken.products.aliases.bad=['unrelated-missing-record'];assert.throws(()=>M.validate(broken),/description link/);
+const recipe=clone(s);recipe.recipes[0].lines[0].ingredientId='deleted';assert.throws(()=>M.validate(recipe),/missing/);
+console.log('Orphaned matches passed: active/forgotten and legacy cleanup, alias repair, visible persisted notices, idempotence and strict recipe/unrelated-corruption checks.');
