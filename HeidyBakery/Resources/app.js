@@ -768,6 +768,7 @@ function receiptPurchases(r) {
       <div class="small">Receipt: ${esc(l.description)}${l.productCode ? ' · Product '+esc(l.productCode) : ''}</div>
       ${!i ? `<p class="small">${match?.reason === 'Confirm the flour type' ? 'Confirm the flour type from the package.' : suggestion ? 'Confirm this ingredient and its pack size.' : 'Match an ingredient, add a new one, or exclude this purchase.'}</p>` : l.needsReview ? '<div class="small">Suggested match · check against the receipt</div>' : ''}
       ${l.parseNote && l.needsReview ? `<p class="small bad">${esc(l.parseNote)}</p>` : ''}
+      ${l.costingNotice ? `<p class="small bad">${esc(l.costingNotice)}</p>` : ''}
       <p>${l.excluded ? 'Excluded' : 'Paid '+money(l.price)+(l.size ? ' · Purchased '+l.size+' '+esc(l.unit) : ' · Confirm purchased quantity')}</p>
       ${l.packSize && l.packageCount ? `<div class="small">${l.packSize} ${esc(l.unit)} × ${l.packageCount} packs${l.quantitySource ? ' · '+esc(l.quantitySource) : ''}</div>` : l.packageCount > 1 ? `<div class="small">${l.packageCount} packs · enter their quantity</div>` : ''}
       ${quantity && M.factor(l.unit,i?.unit)===null ? `<p class="small">For recipes: ${quantity.size} ${esc(quantity.unit)}${l.costing ? ' · '+l.costing.packSize+' '+esc(l.costing.unit)+' per pack, confirmed' : ' · confirmed unit conversion'}</p>` : ''}
@@ -902,11 +903,12 @@ function editPurchase(r, index = null) {
   if(l.bridge && !M.receiptBridge(state,r,l)) delete l.bridge;
   if(l.costing) {
     const i=state.ingredients.find(i=>i.id===l.ingredientId),conversion=M.factor(l.costing.unit,i?.unit);
-    if(!M.costingApplies(r.supplier,l) || conversion===null) delete l.costing;
+    if(!M.costingApplies(r.supplier,l) || conversion===null) M.clearReceiptCosting(r.supplier,l,conversion===null ? 'the unit used in recipes changed' : '');
     else {l.costing.packSize*=conversion;l.costing.unit=i.unit;}
   }
   const newId=M.uuid();
   const body=[
+    l.costingNotice ? '<p class="note" role="status">'+esc(l.costingNotice)+'</p>' : '',
     l.parseNote && l.needsReview ? '<p class="small bad">'+esc(l.parseNote)+'</p>' : '',
     field('Receipt description','description',l.description),
     l.originalDescription && l.originalDescription!==l.description ? '<p class="small">Original: '+esc(l.originalDescription)+'</p>' : '',
@@ -975,6 +977,7 @@ function editPurchase(r, index = null) {
         }
       }
       l.needsReview=false;l.priceChangeConfirmed=true;l.reviewMode=true;
+      if(l.costing || l.bridge || i && M.factor(l.unit,i.unit)!==null) delete l.costingNotice;
       if(M.positive(l.size)&&M.positive(l.packSize)) l.quantityConflict=false;
       if(productAction) {
         if(!fd.get('confirmProductChange')) throw Error('Confirm the remembered-package change, or cancel it.');

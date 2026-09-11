@@ -313,6 +313,7 @@
         if (l.sourceRows != null && (!Array.isArray(l.sourceRows) || l.sourceRows.some(n=>!Number.isInteger(n) || n<0))) throw Error('Invalid receipt source rows.');
         if (l.sourceDescriptions != null && (!Array.isArray(l.sourceDescriptions) || l.sourceDescriptions.some(d=>!text(d)))) throw Error('Invalid receipt source descriptions.');
         if (l.parseNote != null && !text(l.parseNote)) throw Error('Invalid receipt review note.');
+        if(l.costingNotice!=null && !text(l.costingNotice)) throw Error('Invalid receipt quantity notice.');
         if (l.productCode != null && (!text(l.productCode) || l.productCode && !/^[a-z0-9-]{1,40}$/i.test(l.productCode))) throw Error('Invalid receipt product code.');
         if (l.originalDescription != null && !text(l.originalDescription)) throw Error('Invalid original receipt description.');
         for (const key of ['needsReview','reviewMode','priceChangeConfirmed','quantityConflict']) if (key in l && typeof l[key] !== 'boolean') throw Error('Invalid receipt review flag.');
@@ -544,10 +545,10 @@
     }
     line.ingredientId = match.ingredientId;
     if (!line.costing && match.saved?.costing && !match.saved.requiresConfirmation) line.costing = {...match.saved.costing};
-    if (line.costing && !costingApplies(retailer,line)) delete line.costing;
+    clearReceiptCosting(retailer,line);
     line.matchReason = match.reason;
     line.matchCandidates = match.candidates.map(x=>x.ingredientId);
-    line.needsReview = !(match.saved && !match.saved.requiresConfirmation && positive(line.packSize) && !changedPack && positive(line.size));
+    line.needsReview = !!line.costingNotice || !(match.saved && !match.saved.requiresConfirmation && positive(line.packSize) && !changedPack && positive(line.size));
     line.reviewMode = true;
     line.priceChangeConfirmed = false;
     if (changedPack) { line.needsReview = true; line.quantitySource = 'Pack size differs from last purchase'; }
@@ -563,6 +564,13 @@
       c.productCode === String(l.productCode || '').trim().toUpperCase() && positive(c.packSize) && positive(c.purchasePackSize) &&
       normalized(c.purchaseUnit) === normalized(l.unit) && c.purchasePackSize === l.packSize &&
       positive(l.packageCount) && positive(l.size) && Math.abs(l.packSize*l.packageCount-l.size)<.000001;
+  }
+  function clearReceiptCosting(retailer,line,reason='') {
+    const c=line.costing;
+    if(!c || !reason && costingApplies(retailer,line)) return false;
+    reason=reason || (c.ingredientId!==line.ingredientId ? 'the matched ingredient changed' : c.retailer!==retailerKey(retailer) ? 'the retailer changed' : c.productCode!==String(line.productCode||'').trim().toUpperCase() ? 'the product code changed' : normalized(c.purchaseUnit)!==normalized(line.unit) ? 'the purchase unit changed' : 'the package size or purchased quantity changed');
+    line.costingNotice=(line.description || 'This purchase')+': the previous recipe quantity was cleared because '+reason+'. Confirm a new quantity before approval.';
+    delete line.costing;line.needsReview=true;return true;
   }
   function purchaseQuantity(s, r, l) {
     const i=s.ingredients.find(i=>i.id===l.ingredientId);
@@ -1035,6 +1043,7 @@
     suggestedDensity,
     receiptBridge,
     confirmReceiptBridge,
+    clearReceiptCosting,
     unitCost,
     calculate,
     margin,
