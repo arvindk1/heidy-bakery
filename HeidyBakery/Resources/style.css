@@ -31,4 +31,7 @@ input::placeholder,textarea::placeholder{color:var(--muted);opacity:1}.filters l
 .pickup-status p { margin: .25rem 0; }
 .pickup-status { margin-bottom: .75rem; overflow-wrap: anywhere; }
 #match-hints { margin: .5rem 0; }
+/* Auxiliary receipt actions keep the existing text contrast and focus ring. */
+#dialog button.secondary { background: transparent; border-color: transparent; color: var(--brand); text-decoration: underline; text-underline-offset: .18em; }
+#dialog button.secondary:hover:not(:disabled) { background: var(--wash); }
 #receipt-result .actions { margin-top: .5rem; }
