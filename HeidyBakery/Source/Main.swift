@@ -543,10 +543,86 @@ final class ReceiptScanner {
   }
 }
 
+final class AutomaticBackups {
+  let store: Store
+  let configURL: URL
+  var config: [String: Any] = [:]
+  init(_ store: Store) {
+    self.store = store
+    configURL = store.root.appendingPathComponent("automatic-backups.json")
+    if fm.fileExists(atPath: configURL.path) {
+      do {
+        guard let read = try jsonObject(Data(contentsOf: configURL)) as? [String: Any],
+          let id = read["libraryID"] as? String, UUID(uuidString: id) != nil else { throw failure("Invalid backup settings") }
+        config = read
+      } catch { config["needsFolderReview"] = true; config["error"] = "Automatic backup settings could not be read. Choose the backup folder again." }
+    }
+    if config["libraryID"] == nil { config["libraryID"] = UUID().uuidString }
+  }
+  var status: [String: Any] {
+    ["path": config["path"] as? String ?? store.root.appendingPathComponent("Automatic Backups").path,
+     "lastSuccess": config["lastSuccess"] as? String ?? "", "error": config["error"] as? String ?? ""]
+  }
+  func persist() throws { try jsonData(config).write(to: configURL, options: .atomic) }
+  func configure(_ url: URL) throws {
+    let access = url.startAccessingSecurityScopedResource()
+    defer { if access { url.stopAccessingSecurityScopedResource() } }
+    guard (try url.resourceValues(forKeys: [.isDirectoryKey])).isDirectory == true else { throw failure("Choose an available backup folder.") }
+    let bookmark = try url.bookmarkData(options: [.withSecurityScope], includingResourceValuesForKeys: nil, relativeTo: nil)
+    let previous = config
+    config["path"] = url.path; config["bookmark"] = bookmark.base64EncodedString(); config["error"] = ""; config["lastSuccess"] = ""
+    config["needsFolderReview"] = false
+    do { try persist() } catch { config = previous; throw error }
+  }
+  func run() -> [String: Any] {
+    do {
+      if config["needsFolderReview"] as? Bool == true { throw failure("Choose the automatic backup folder again in Settings.") }
+      var folder: URL
+      if let path = config["path"] as? String {
+        folder = URL(fileURLWithPath: path)
+        if let encoded = config["bookmark"] as? String, let data = Data(base64Encoded: encoded) {
+          var stale = false
+          folder = try URL(resolvingBookmarkData: data, options: [.withSecurityScope, .withoutUI], relativeTo: nil, bookmarkDataIsStale: &stale)
+          if stale { try configure(folder) }
+        }
+      } else {
+        folder = store.root.appendingPathComponent("Automatic Backups")
+        try fm.createDirectory(at: folder, withIntermediateDirectories: true)
+      }
+      let access = folder.startAccessingSecurityScopedResource()
+      defer { if access { folder.stopAccessingSecurityScopedResource() } }
+      guard (try folder.resourceValues(forKeys: [.isDirectoryKey])).isDirectory == true else { throw failure("The backup folder is unavailable.") }
+      let data = try jsonData(store.backup())
+      _ = try Store.checkBackup(data)
+      let prefix = "Heidy-auto-" + (config["libraryID"] as! String) + "-"
+      let file = folder.appendingPathComponent(prefix + UUID().uuidString + ".heidybackup")
+      try data.write(to: file, options: .atomic)
+      // Only this installation's automatic copies are pruned; manual backups
+      // and other Macs' copies in a shared folder remain untouched.
+      let owned = try fm.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.contentModificationDateKey])
+        .filter { $0.standardizedFileURL.path != file.standardizedFileURL.path && $0.lastPathComponent.hasPrefix(prefix) && $0.pathExtension == "heidybackup" }
+        .sorted { ((try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast) > ((try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast) }
+      for old in owned.dropFirst(9) { try fm.removeItem(at: old) }
+      config["lastSuccess"] = ISO8601DateFormatter().string(from: Date()); config["error"] = ""
+      try persist()
+    } catch {
+      config["error"] = "Automatic backup needs attention: " + error.localizedDescription
+      try? persist()
+    }
+    return status
+  }
+  func afterSave(_ previous: [String: Any]?, _ current: [String: Any]) -> [String: Any] {
+    let reviewed = Set((previous?["receipts"] as? [[String: Any]] ?? []).filter { $0["status"] as? String == "Reviewed" }.compactMap { $0["id"] as? String })
+    let approved = (current["receipts"] as? [[String: Any]] ?? []).contains { $0["status"] as? String == "Reviewed" && !reviewed.contains($0["id"] as? String ?? "") }
+    return approved || !(config["error"] as? String ?? "").isEmpty ? run() : status
+  }
+}
+
 final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler,
   WKNavigationDelegate
 {
   var window: NSWindow!, web: WKWebView!, store: Store!
+  var automaticBackups: AutomaticBackups!
   var pendingRestore: [String: Any]?
   let receiptQueue = DispatchQueue(label: "com.heidybakery.receipts", qos: .userInitiated)
   let scanner = ReceiptScanner()
@@ -582,6 +658,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
       NSApp.terminate(nil)
       return
     }
+    automaticBackups = AutomaticBackups(store)
     let menu = NSMenu()
     let appItem = NSMenuItem()
     menu.addItem(appItem)
@@ -686,6 +763,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
           id,
           [
             "state": try store.state(), "seed": seed, "dataPath": store.root.path,
+            "automaticBackup": automaticBackups.status,
             "appVersion": ["version": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "Unknown", "build": Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "Unknown"],
             "inboxStatus": UserDefaults.standard.dictionary(forKey: "receiptInboxStatus") ?? [:],
             "inbox": ProcessInfo.processInfo.environment["HEIDY_RECEIPT_INBOX"]
@@ -693,8 +771,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
               ?? "",
           ])
       case "save":
+        let previous = try store.state() as? [String: Any]
         try store.save(payload)
-        reply(id, true)
+        reply(id, ["saved": true, "automaticBackup": automaticBackups.afterSave(previous, payload)])
+      case "chooseBackupFolder":
+        let p = NSOpenPanel(); p.title = "Choose a folder for automatic backups"
+        p.canChooseDirectories = true; p.canChooseFiles = false
+        if p.runModal() == .OK, let url = p.url {
+          try automaticBackups.configure(url)
+          reply(id, automaticBackups.run())
+        } else { reply(id) }
+      case "retryAutomaticBackup": reply(id, automaticBackups.run())
       case "undo": reply(id, try store.undo())
       case "chooseInbox":
         let p = NSOpenPanel()
@@ -815,7 +902,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
           "Save a full bakery backup", save: true, name: "Heidy Bakery \(Self.today()).heidybackup")
         {
           try jsonData(store.backup()).write(to: url, options: .atomic)
-          reply(id, url.path)
+          do { try automaticBackups.configure(url.deletingLastPathComponent()) }
+          catch {
+            automaticBackups.config["error"] = "Full backup saved, but the automatic backup folder could not be remembered: " + error.localizedDescription
+            try? automaticBackups.persist()
+          }
+          reply(id, ["path": url.path, "automaticBackup": automaticBackups.status])
         } else {
           reply(id)
         }
@@ -1118,6 +1210,45 @@ if CommandLine.arguments.contains("--export-fixture"), CommandLine.arguments.cou
     guard try jsonData(store.state()) == jsonData(migratedProductState) else {
       throw failure("Confirmed recipe quantities or learned product setup lost in backup")
     }
+    let auto = AutomaticBackups(store)
+    let automaticFolder = store.root.appendingPathComponent("Automatic Backups")
+    _ = auto.afterSave(state, state)
+    guard !fm.fileExists(atPath: automaticFolder.path) else { throw failure("Draft save created an automatic backup") }
+    let approvedState = try store.state() as! [String: Any]
+    guard auto.afterSave(state, approvedState)["error"] as? String == "" else { throw failure("Approval automatic backup failed") }
+    let manualFile = automaticFolder.appendingPathComponent("Manual backup.heidybackup")
+    let otherMacFile = automaticFolder.appendingPathComponent("Heidy-auto-other-mac.heidybackup")
+    try Data("manual".utf8).write(to: manualFile)
+    try Data("other mac".utf8).write(to: otherMacFile)
+    for _ in 0..<12 {
+      guard auto.run()["error"] as? String == "" else { throw failure("Automatic backup repeat failed") }
+    }
+    let prefix = "Heidy-auto-" + (auto.config["libraryID"] as! String) + "-"
+    let copies = try fm.contentsOfDirectory(at: automaticFolder, includingPropertiesForKeys: nil).filter { $0.lastPathComponent.hasPrefix(prefix) }
+    guard copies.count == 10, fm.fileExists(atPath: manualFile.path), fm.fileExists(atPath: otherMacFile.path) else {
+      throw failure("Automatic retention failed: \(copies.count) copies; manual exists: \(fm.fileExists(atPath: manualFile.path)); other Mac exists: \(fm.fileExists(atPath: otherMacFile.path))")
+    }
+    for copy in copies { _ = try Store.checkBackup(Data(contentsOf: copy)) }
+    guard !(AutomaticBackups(store).status["lastSuccess"] as? String ?? "").isEmpty else { throw failure("Backup status did not survive reload") }
+    let receiptFile = store.root.appendingPathComponent("Receipts/test.txt")
+    let receiptCopy = try Data(contentsOf: receiptFile)
+    let beforeFailure = try jsonData(store.state())
+    try fm.removeItem(at: receiptFile)
+    guard !(auto.run()["error"] as? String ?? "").isEmpty else { throw failure("Missing receipt silently accepted in automatic backup") }
+    guard try jsonData(store.state()) == beforeFailure else { throw failure("Backup failure changed library") }
+    try receiptCopy.write(to: receiptFile)
+    guard auto.afterSave(approvedState, approvedState)["error"] as? String == "" else { throw failure("Backup did not retry after recovery") }
+    let configured = store.root.appendingPathComponent("Chosen backups")
+    try fm.createDirectory(at: configured, withIntermediateDirectories: true)
+    try auto.configure(configured)
+    guard AutomaticBackups(store).run()["error"] as? String == "" else { throw failure("Configured backup bookmark did not reload") }
+    try fm.removeItem(at: configured)
+    guard !(auto.run()["error"] as? String ?? "").isEmpty else { throw failure("Unavailable backup folder was not reported") }
+    guard !(AutomaticBackups(store).status["error"] as? String ?? "").isEmpty else { throw failure("Backup failure did not survive reload") }
+    guard try jsonData(store.state()) == beforeFailure else { throw failure("Unavailable folder changed library") }
+    try auto.configure(automaticFolder)
+    guard auto.run()["error"] as? String == "" else { throw failure("Backup folder recovery failed") }
+    print("Automatic backup checks passed: approval trigger, full receipt archives, ten-copy retention, manual/other-Mac preservation, reload, unavailable folder, missing original, unchanged saved records, and retry recovery.")
     let snapshot = try jsonData(store.state())
     var badState = state
     badState["receipts"] = [["id": "broken"]]

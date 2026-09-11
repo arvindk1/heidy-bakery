@@ -60,6 +60,10 @@ When count and weight units differ, enter the **measured total weight of the ite
 
 **Save full backup** preserves the bakery records and original receipts together. Save it somewhere safe, such as iCloud Drive. A full backup is different from an Excel export: Excel does not contain receipt originals or complete audit history.
 
+**Automatic backups** save a full copy after each approved receipt and keep the latest ten automatic copies from this Mac. Manual backups are retained. In Settings, choose a backup folder or use **Back up now**. Saving a manual backup also selects its folder for future automatic copies. The default automatic folder is local to this Mac; choose an iCloud Drive folder if you want iCloud to sync copies. Settings shows the folder and last successful backup. A failed backup shows a warning; your saved library remains intact. Retry after making the folder available.
+
+Settings also lists master items with missing quantities, units or identities. These records are preserved for review, including records that may be needed by recipes not yet imported.
+
 The live records are stored locally in **Library/Application Support/Heidy Bakery**. **Show local data folder** opens that folder. Do not move the live database into iCloud. Use the backup command instead. Up to 30 saved changes can be undone.
 
 ## First validation with Heidy

@@ -23,6 +23,7 @@ let state = M.empty(),
   inbox = '',
   appVersion = null,
   pickupStatus = null,
+  automaticBackup = null,
   checkingFolder = false,
   lastSaved = null,
   search = '',
@@ -57,6 +58,15 @@ function notice(message, error = false) {
   $('#notice').hidden = false;
   $('#notice').innerHTML = `<span class="${error ? 'bad' : ''}">${esc(message)}</span><button id="dismiss-notice" aria-label="Dismiss">×</button>`;
   $('#dismiss-notice').onclick = () => $('#notice').hidden = true;
+}
+function updateAutomaticBackup(status) {
+  if(!status) return;
+  automaticBackup=status;
+  let warning=$('#automatic-backup-warning');
+  if(!warning){warning=document.createElement('div');warning.id='automatic-backup-warning';warning.className='note bad';warning.setAttribute('role','alert');$('#main').before(warning);}
+  warning.hidden=!status.error;
+  warning.textContent=status.error ? status.error+' Your records remain saved on this Mac. Retry the backup in Settings.' : '';
+  if($('#automatic-backup-status')) $('#automatic-backup-status').textContent='Folder: '+status.path+'. Last successful backup: '+(status.lastSuccess || 'Not yet created')+'.';
 }
 async function busy(label, fn) {
   uiBusy++;
@@ -116,7 +126,10 @@ async function save(message = 'Saved', rerender = true) {
   const job = saveTail.then(async () => {
     if (generation !== saveGeneration) throw Error('An earlier save failed. Please enter this change again.');
     try {
-      if (!same(snapshot, lastSaved)) await native('save', snapshot);
+      if (!same(snapshot, lastSaved)) {
+        const result=await native('save', snapshot);
+        if(result?.automaticBackup) updateAutomaticBackup(result.automaticBackup);
+      }
       // This is the exact snapshot acknowledged by the native store.
       lastSaved = clone(snapshot);
       if (message !== 'Saved') notice(message);
@@ -1162,13 +1175,17 @@ function settingsPage() {
     }
   });
   const quality=M.ingredientIssues(state);
+  $('#main').insertAdjacentHTML('beforeend','<div class="pane"><h3>Automatic backups</h3><p>A full backup is saved after every approved receipt. The latest 10 automatic copies from this Mac are retained; manual backups remain untouched. Saving a manual backup also sets its folder for future automatic copies.</p><p class="small" id="automatic-backup-status"></p><p class="small">The default folder is on this Mac. Choose your existing backup folder, including iCloud Drive, to keep copies elsewhere. Cloud upload depends on iCloud.</p><div class="actions"><button id="choose-backup-folder">Choose backup folder</button><button id="retry-auto-backup">Back up now</button></div></div>');
+  updateAutomaticBackup(automaticBackup);
+  action('#choose-backup-folder',()=>busy('Choosing backup folder…',async()=>{await saveTail;updateAutomaticBackup(await native('chooseBackupFolder'));}));
+  action('#retry-auto-backup',()=>busy('Saving complete backup…',async()=>{await saveTail;updateAutomaticBackup(await native('retryAutomaticBackup'));}));
   if(quality.length) $('#main').insertAdjacentHTML('beforeend','<div class="note" id="ingredient-quality"><h3>Ingredients to review ('+quality.length+')</h3><ul>'+quality.map(q=>'<li><button class="link" data-quality-item="'+esc(q.ingredientId)+'">'+esc(q.name)+'</button> — '+esc(q.message)+'</li>').join('')+'</ul><p>Use a confirmed package quantity or measurement. Missing details are not estimated.</p></div>');
   $$('[data-quality-item]').forEach(b=>b.onclick=()=>openIngredientRecord(b.dataset.qualityItem));
   if(state.maintenanceNotices?.length) $('#main').insertAdjacentHTML('beforeend','<div class="note" id="maintenance-notices"><h3>Saved matches need review</h3><ul>'+state.maintenanceNotices.map(n=>'<li>'+esc(n)+'</li>').join('')+'</ul></div>');
   action('#backup', () => busy('Saving complete backup…', async () => {
     await saveTail;
     const p = await native('backup');
-    if (p) notice('Full backup saved.');
+    if (p) {if(p.automaticBackup)updateAutomaticBackup(p.automaticBackup);notice('Full backup saved.');}
   }));
   action('#restore', restoreBackup);
   action('#undo', () => modal('Undo the last saved change?', '<p>Restore the records from before the most recent save. Original receipt files will remain safely stored.</p>', async () => {
@@ -1426,6 +1443,7 @@ $('#dialog').addEventListener('close', () => {
     inbox = result.inbox;
     appVersion = result.appVersion || null;
     pickupStatus = result.inboxStatus || null;
+    updateAutomaticBackup(result.automaticBackup);
     let migrated = false;
     if (result.state) {
       const vanilla = result.state.ingredients?.find(i => i.name === 'Vanilla Paste' && i.updated === '2029-08-31');
