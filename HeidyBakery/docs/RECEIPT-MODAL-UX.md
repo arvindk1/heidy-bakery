@@ -52,5 +52,5 @@ The existing contrast suite passed all 44 light/dark pairings. No claim is made
 that automated checks replace a VoiceOver assessment.
 
 `model.js`, `factor()`, recipe costing, and all 197 starter master records are
-unchanged by this modal update. The distributed app has not been rebuilt for this
-change; signing and notarization must be verified when preparing the next release.
+unchanged by this modal update. The update is included in signed, notarized version
+0.3.7 (build 10); see `RELEASE-0.3.7.md` for the final ZIP verification evidence.
