@@ -326,6 +326,8 @@
     }
     for (const v of Object.values(s.mappings)) if (!object(v) || !ingredientIds.has(v.ingredientId) || !positive(v.size) || !named(v.unit) || v.packSize != null && !positive(v.packSize)) throw Error('Invalid saved receipt match.');
     for (const v of Object.values(s.mappings)) if (v.costing != null && !validCosting(v.costing)) throw Error('Invalid saved recipe quantity.');
+    const validPackCount=v=>v.packageCount==null || Number.isSafeInteger(v.packageCount) && v.packageCount>0 && positive(v.packSize) && Math.abs(v.size-v.packSize*v.packageCount)<1e-6;
+    for(const v of Object.values(s.mappings)) if(!validPackCount(v)) throw Error('Invalid saved purchase count.');
     for(const v of Object.values(s.mappings)) for(const key of ['density','avgUnitWeight']) if(v[key]!=null && !positive(v[key])) throw Error('Invalid saved receipt conversion.');
     for(const v of Object.values(s.mappings)) if(v.avgUnitWeight!=null && (!validBridge(v.weightMeasurement) || v.weightMeasurement.kind!=='avgUnitWeight' || v.weightMeasurement.value!==v.avgUnitWeight)) throw Error('Invalid saved weight measurement.');
     if (s.products != null) {
@@ -333,6 +335,7 @@
       if (!object(p) || p.version!==1 || !object(p.records) || !object(p.aliases)) throw Error('Invalid saved products.');
       const codes=new Set();
       for (const [id,v] of Object.entries(p.records)) {
+        if(!validPackCount(v)) throw Error('Invalid saved product purchase count.');
         for(const key of ['density','avgUnitWeight']) if(v[key]!=null && !positive(v[key])) throw Error('Invalid saved product conversion.');
         if(v.avgUnitWeight!=null && (!validBridge(v.weightMeasurement) || v.weightMeasurement.kind!=='avgUnitWeight' || v.weightMeasurement.value!==v.avgUnitWeight || v.weightMeasurement.ingredientId!==v.ingredientId || v.weightMeasurement.retailer!==v.retailer || v.weightMeasurement.productCode!==v.productCode)) throw Error('Invalid saved product weight measurement.');
         if(v.requiresConfirmation!=null && typeof v.requiresConfirmation!=='boolean') throw Error('Invalid product confirmation flag.');
@@ -391,7 +394,7 @@
     return p;
   }
   function mappingValue(v) {
-    return {ingredientId:v.ingredientId,size:v.size,unit:v.unit,...(v.packSize!=null?{packSize:v.packSize}:{}),...(v.costing?{costing:JSON.parse(JSON.stringify(v.costing))}:{}),...(v.density!=null?{density:v.density}:{}),...(v.avgUnitWeight!=null?{avgUnitWeight:v.avgUnitWeight,weightMeasurement:JSON.parse(JSON.stringify(v.weightMeasurement))}:{})};
+    return {ingredientId:v.ingredientId,size:v.size,unit:v.unit,...(v.packSize!=null?{packSize:v.packSize}:{}),...(v.packageCount!=null?{packageCount:v.packageCount}:{}),...(v.costing?{costing:JSON.parse(JSON.stringify(v.costing))}:{}),...(v.density!=null?{density:v.density}:{}),...(v.avgUnitWeight!=null?{avgUnitWeight:v.avgUnitWeight,weightMeasurement:JSON.parse(JSON.stringify(v.weightMeasurement))}:{})};
   }
   function sameMapping(a,b) {
     const stable=v=>v && typeof v==='object' ? Object.fromEntries(Object.keys(v).sort().map(k=>[k,stable(v[k])])) : v;
@@ -431,7 +434,7 @@
       (other.ingredientId!==l.ingredientId || !positive(other.packSize) || !positive(l.packSize) || factor(other.unit,l.unit)===null || Math.abs(other.packSize*factor(other.unit,l.unit)-l.packSize)>.000001));
     const id=old?.id || uuid(),v={id,retailer,productCode:rememberedCode,namespace:'receipt',revision:(old?.revision||0)+1,forgotten:false,
       requiresConfirmation:!!conflicting,
-      ingredientId:l.ingredientId,size:l.size,unit:l.unit,...(positive(l.packSize)&&positive(l.packageCount)?{packSize:l.packSize}:{}),
+      ingredientId:l.ingredientId,size:l.size,unit:l.unit,...(positive(l.packSize)&&positive(l.packageCount)?{packSize:l.packSize,packageCount:l.packageCount}:{}),
       ...(costingApplies(r.supplier,l) && code===rememberedCode ? {costing:{...l.costing}}:{}),
       provenance:{source:l.productDetails ? 'Pasted details, confirmed' : 'Receipt purchase, confirmed',receiptId:r.id,date:r.date,confirmedAt:now.toISOString(),text:l.productDetails || l.originalDescription || l.description}};
     // An explicit per-pack override supersedes a previously learned average.
@@ -456,7 +459,9 @@
     if(change.forget) {v.forgotten=true;delete v.costing;delete v.avgUnitWeight;delete v.weightMeasurement;}
     else {
       if(!positive(change.packSize) || factor(change.unit,old.unit)===null) throw Error('Enter a positive package size in a compatible purchase unit.');
-      v.packSize=change.packSize;v.size=change.packSize;v.unit=normalized(change.unit);delete v.costing;delete v.avgUnitWeight;delete v.weightMeasurement;
+      const count=old.packageCount ?? (positive(old.packSize) ? old.size/old.packSize : null);
+      if(!Number.isSafeInteger(count) || count<1) throw Error('The saved purchase count is unknown. Confirm this product on a receipt before correcting its pack size.');
+      v.packSize=change.packSize;v.packageCount=count;v.size=change.packSize*count;v.unit=normalized(change.unit);delete v.costing;delete v.avgUnitWeight;delete v.weightMeasurement;
       v.requiresConfirmation=false;
       v.provenance={source:'Saved package corrected',date:localDate(now),confirmedAt:now.toISOString()};
     }

@@ -33,6 +33,7 @@ node "$PROJECT_DIR/Tests/receipt-parsing.test.cjs"
 node "$PROJECT_DIR/Tests/receipt-products.test.cjs"
 node "$PROJECT_DIR/Tests/saved-products.test.cjs"
 node "$PROJECT_DIR/Tests/unit-conversion.test.cjs"
+node "$PROJECT_DIR/Tests/hardening.test.cjs"
 node "$PROJECT_DIR/Tests/margin-watch.test.cjs"
 node "$PROJECT_DIR/Tests/refresh-contrast.test.cjs"
 for ARCH in arm64 x86_64; do
