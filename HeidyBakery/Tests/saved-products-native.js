@@ -8,7 +8,7 @@ try {
  function edit(){const ready=document.querySelector('.receipt-ready');if(ready)ready.open=true;document.querySelector('[data-edit-purchase="0"]').click();}
  function paste(){document.querySelector('#parse-product').closest('details').open=true;input('productNotes','Butter, Unsalted, 1 lb, 4 ct');document.querySelector('#parse-product').click();document.querySelector('#confirm-paste').checked=true;document.querySelector('#apply-paste').click();}
  await until(()=>state?.receipts.some(r=>r.id==='legacy')&&document.querySelector('#new-recipe'),'Fixture load');
- check(appVersion.version==='0.3.5'&&appVersion.build==='8','Build version');
+ check(appVersion.version==='0.3.6'&&appVersion.build==='9','Build version');
  const original=JSON.stringify((await native('load')).state);
  openReceiptRecord('legacy');await until(()=>document.querySelector('[data-edit-purchase="0"]'),'Receipt card');edit();paste();
  check(document.querySelector('[name=size]').value==='8','Inner package count confused with purchased count');

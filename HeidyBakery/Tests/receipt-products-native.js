@@ -6,7 +6,7 @@ try {
   async function submit(){document.querySelector('#dialog-form').requestSubmit();await until(()=>!document.querySelector('#dialog').open,'Dialog save');await saveTail;}
   const input=(name,value)=>{const el=document.querySelector('#dialog [name='+name+']');el.value=value;el.dispatchEvent(new Event('input'));};
   await until(()=>state?.receipts.some(r=>r.id==='legacy')&&document.querySelector('#new-recipe'),'Load fixture');
-  const loaded=await native('load');check(loaded.appVersion.version==='0.3.5'&&loaded.appVersion.build==='8','Version/build');
+  const loaded=await native('load');check(loaded.appVersion.version==='0.3.6'&&loaded.appVersion.build==='9','Version/build');
   const before=clone(loaded.state);openReceiptRecord('legacy');
   await until(()=>document.querySelector('#refresh-receipt'),'Legacy refresh offered');
   document.querySelector('#refresh-receipt').click();

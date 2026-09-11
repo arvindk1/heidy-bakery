@@ -14,7 +14,7 @@ assert.equal(sku('1375333').size,12);assert.equal(sku('1375333').unit,'lb');
 assert.equal(lines[0].productCode,'');assert.equal(lines[0].description,'WHOLE MILK');assert.match(lines[0].parseNote,/read as 3/);
 assert.equal(new Set(lines.flatMap(l=>l.sourceRows)).size,12,'Every OCR purchase has its own provenance');
 assert.equal(r.date,'2026-08-24');assert.equal(r.supplier,'Costco');assert.deepEqual(s,before,'Extraction changed master data');
-assert.ok(M.receiptIssues(s,r,now).some(i=>/cannot be interchanged/.test(i.message)),'Quart suggestion must not become a gram quantity');
+assert.ok(M.receiptIssues(s,r,now).some(i=>/confirm a density/.test(i.message)),'Quart suggestion must not become a gram quantity without confirmation');
 assert.equal(M.prepareReceipt(s,r,now),false);assert.equal(M.receiptCandidates(s,r,now).length,0);
 r.lines.forEach(l=>{l.description='User description';l.productCode='';});assert.equal(M.receiptCandidates(s,r,now).length,0,'Edited descriptions re-added OCR rows');
 const varied=M.receiptSuggestions(s,receipt('COSTCO\nE 384962 KS U/S QTRS 9.49\nF 384962 BUTTER QTRS 8.49\nTAX 0.00'),now).lines;

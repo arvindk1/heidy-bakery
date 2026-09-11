@@ -770,7 +770,7 @@ function receiptPurchases(r) {
       ${l.parseNote && l.needsReview ? `<p class="small bad">${esc(l.parseNote)}</p>` : ''}
       <p>${l.excluded ? 'Excluded' : 'Paid '+money(l.price)+(l.size ? ' · Purchased '+l.size+' '+esc(l.unit) : ' · Confirm purchased quantity')}</p>
       ${l.packSize && l.packageCount ? `<div class="small">${l.packSize} ${esc(l.unit)} × ${l.packageCount} packs${l.quantitySource ? ' · '+esc(l.quantitySource) : ''}</div>` : l.packageCount > 1 ? `<div class="small">${l.packageCount} packs · enter their quantity</div>` : ''}
-      ${quantity && M.factor(l.unit,i?.unit)===null ? `<p class="small">For recipes: ${quantity.size} ${esc(quantity.unit)} · ${l.costing.packSize} ${esc(l.costing.unit)} per pack, confirmed</p>` : ''}
+      ${quantity && M.factor(l.unit,i?.unit)===null ? `<p class="small">For recipes: ${quantity.size} ${esc(quantity.unit)}${l.costing ? ' · '+l.costing.packSize+' '+esc(l.costing.unit)+' per pack, confirmed' : ' · confirmed unit conversion'}</p>` : ''}
       ${!l.excluded && change.newCost!==null ? `<div class="small">${unitMoney(change.oldCost)} → ${unitMoney(change.newCost)} / ${esc(change.unit)}${change.percent !== null ? ' · '+(change.percent>0?'+':'')+change.percent.toFixed(1)+'%' : ''}</div>${change.older ? '<p class="small">Older purchase: history only.</p>' : change.unusual ? '<p class="bad small">Check this price change.</p>' : ''}` : ''}</div>`;
   };
   if (!editable) return r.lines.map(row).join('');
@@ -899,6 +899,7 @@ function editPurchase(r, index = null) {
   const receiptSnapshot=JSON.stringify(r);
   let productAction=null,pasteApplied=null;
   l.id=l.id || M.uuid();
+  if(l.bridge && !M.receiptBridge(state,r,l)) delete l.bridge;
   if(l.costing) {
     const i=state.ingredients.find(i=>i.id===l.ingredientId),conversion=M.factor(l.costing.unit,i?.unit);
     if(!M.costingApplies(r.supplier,l) || conversion===null) delete l.costing;
@@ -918,6 +919,7 @@ function editPurchase(r, index = null) {
     '<div class="fields three">'+field('Paid total ($)','price',l.price ?? '','number','min="0" step=".01"')+field('Size of one pack','packSize',l.packSize ?? '','number','min="0.000001" step="any"')+field('Number of packs','packageCount',l.packageCount ?? '','number','min="1" step="1"')+'</div>',
     '<div class="fields two">'+field('Total quantity purchased','size',l.size ?? '','number','min="0.000001" step="any"')+field('Purchase unit','unit',l.unit)+'</div>',
     '<p class="small" id="pack-calculation">Enter pack size and count, or the total quantity. Confirm the quantity against the package.</p>',
+    '<div id="unit-bridge" class="note" hidden><strong>Convert purchase units</strong><div id="density-bridge" hidden>'+field('Density (g/ml)','receiptDensity',l.bridge?.kind==='density' ? l.bridge.value : state.ingredients.find(i=>i.id===l.ingredientId)?.density ?? '','number','min="0.000001" step="any"')+'<p class="small" id="density-suggestion"></p><label class="inline"><input type="checkbox" name="densityConfirmed" '+(l.bridge?.kind==='density' ? 'checked' : '')+'>I accept this density for this ingredient.</label><p class="small">Density is approximate and varies by product. It stays editable; changing it does not rewrite earlier purchases.</p></div><div id="weight-bridge" hidden><p id="weight-help" class="small"></p>'+field('Measured total weight of the items bought (g)','measuredTotalWeight',l.bridge?.kind==='avgUnitWeight' ? l.bridge.totalWeight : '','number','min="0.000001" step="any"')+'<div id="measured-count" hidden>'+field('Number of items actually bought','measuredItemCount',l.bridge?.kind==='avgUnitWeight' ? l.bridge.measuredCount : '','number','min="1" step="1"')+'</div><label class="inline"><input type="checkbox" name="weightConfirmed" '+(l.bridge?.kind==='avgUnitWeight' ? 'checked' : '')+'>I measured this total weight for these items.</label><p class="small">Use the ingredient amount used in your recipes. No average item weight is supplied automatically.</p></div><p id="bridge-result" class="small" role="status"></p></div>',
     '<div id="recipe-quantity" hidden class="note"><strong>Quantity for recipes</strong><p id="recipe-quantity-help" class="small"></p><label><span id="recipe-pack-label">Usable quantity in one purchased pack</span><input name="costingPack" type="number" min="0.000001" step="any" value="'+(l.costing?.packSize ?? '')+'"></label><label class="inline"><input type="checkbox" name="costingConfirmed" '+(l.costing?.confirmed ? 'checked' : '')+'>I confirmed this quantity from the package or a measured usable amount.</label><p class="small" id="recipe-quantity-total"></p></div>',
     '<label class="inline"><input name="excluded" type="checkbox" '+(l.excluded ? 'checked' : '')+'>Exclude this purchase from Ingredients</label><label class="inline spacer"><input name="freeConfirmed" type="checkbox" '+(l.freeConfirmed ? 'checked' : '')+'>This purchase was free</label>',
     index!==null ? '<label class="inline spacer"><input type="checkbox" name="remove">Remove this purchase line</label>' : '',
@@ -955,9 +957,18 @@ function editPurchase(r, index = null) {
       }
       const i=newItem || state.ingredients.find(i=>i.id===l.ingredientId);
       delete l.costing;
+      delete l.bridge;
       if(!l.excluded && i && l.unit && M.factor(l.unit,i.unit)===null) {
+        const kind=M.bridgeKind(l.unit,i.unit),density=num(fd.get('receiptDensity')),weight=num(fd.get('measuredTotalWeight'));
+        if(kind==='density' && density!==null && (fd.get('densityConfirmed') || density!==i.density)) {
+          if(!fd.get('densityConfirmed')) throw Error('Confirm the density before using it.');
+          l.bridge=M.confirmReceiptBridge(i,r,l,kind,density);
+        } else if(kind==='avgUnitWeight' && weight!==null) {
+          if(!fd.get('weightConfirmed')) throw Error('Confirm the measured total weight of this purchase.');
+          l.bridge=M.confirmReceiptBridge(i,r,l,kind,weight,num(fd.get('measuredItemCount')));
+        }
         const pack=num(fd.get('costingPack'));
-        if(pack!==null) {
+        if(!l.bridge && pack!==null) {
           if(!M.positive(pack)||!fd.get('costingConfirmed')) throw Error('Confirm the usable quantity for recipes in one purchased pack.');
           if(!M.positive(l.packSize)||!Number.isInteger(l.packageCount)||l.packageCount<1) throw Error('Enter the purchase pack size and number of packs first.');
           l.costing={ingredientId:i.id,retailer:M.retailerKey(r.supplier),productCode:l.productCode,purchasePackSize:l.packSize,purchaseUnit:l.unit,packSize:pack,unit:i.unit,confirmed:true};
@@ -976,14 +987,46 @@ function editPurchase(r, index = null) {
   });
   const input=name=>$('#dialog [name='+name+']');
   const chosen=()=>input('ingredientId').value==='__new__' ? {name:input('newName').value || 'New ingredient',unit:input('newUnit').value} : state.ingredients.find(i=>i.id===input('ingredientId').value);
+  let bridgeContext=null;
+  const updateBridge=()=>{
+    const i=chosen(),unit=input('unit').value.trim(),kind=i ? M.bridgeKind(unit,i.unit) : '',code=input('productCode').value.trim().toUpperCase();
+    const key=(i?.id || input('ingredientId').value)+'|'+code+'|'+kind+'|'+unit;
+    if(bridgeContext!==null && bridgeContext!==key) {
+      input('receiptDensity').value=i?.density ?? '';input('densityConfirmed').checked=false;
+      input('measuredTotalWeight').value='';input('measuredItemCount').value='';input('weightConfirmed').checked=false;
+    }
+    bridgeContext=key;
+    $('#unit-bridge').hidden=!kind || input('excluded').checked;
+    $('#density-bridge').hidden=kind!=='density';$('#weight-bridge').hidden=kind!=='avgUnitWeight';
+    if(!kind || input('excluded').checked) return;
+    const line={...l,bridge:undefined,ingredientId:i.id,productCode:code,unit,size:num(input('size').value),packSize:num(input('packSize').value),packageCount:num(input('packageCount').value)};
+    let bridge=M.receiptBridge(state,r,line);
+    if(kind==='density') {
+      const suggested=M.suggestedDensity(i.name);
+      $('#density-suggestion').innerHTML=M.positive(i.density) ? 'Saved density: '+i.density+' g/ml. Confirm any edited value.' : suggested!==null ? 'Suggested approximation: '+suggested+' g/ml. <button type="button" id="use-density-suggestion">Use suggested density</button>' : 'Enter a density appropriate to this product, or confirm a recipe quantity per pack below.';
+      if($('#use-density-suggestion')) $('#use-density-suggestion').onclick=()=>{input('receiptDensity').value=suggested;input('densityConfirmed').checked=false;updateBridge();};
+      if(input('densityConfirmed').checked && M.positive(num(input('receiptDensity').value))) bridge={density:num(input('receiptDensity').value)};
+      else if(num(input('receiptDensity').value)!==i.density) bridge=null;
+    } else {
+      const reverse=M.unitCategory(unit)==='mass';$('#measured-count').hidden=!reverse;
+      $('#weight-help').textContent=bridge?.avgUnitWeight ? 'Remembered measured weight: '+bridge.avgUnitWeight+' g per item for this retailer and product. Enter a new total only if you measured this purchase again.' : reverse ? 'The purchase is weighed. Enter its total weight in grams and the number of items to establish grams per item.' : 'Enter the measured total weight of all the items bought. The app will divide it by the receipt’s item count.';
+      if(input('weightConfirmed').checked) {
+        const count=reverse ? num(input('measuredItemCount').value) : line.size*(M.factor(unit,'each') || (unit==='pc' ? 1 : 0)),weight=num(input('measuredTotalWeight').value);
+        if(M.positive(count)&&M.positive(weight)) bridge={avgUnitWeight:weight/count};
+      } else if(num(input('measuredTotalWeight').value)!==null) bridge=null;
+    }
+    const f=M.factor(unit,i.unit,bridge),total=f===null || !M.positive(line.size) ? null : line.size*f;
+    $('#bridge-result').textContent=M.positive(total) ? 'Converted purchase: '+Number(total.toFixed(6))+' '+i.unit+(bridge?.avgUnitWeight ? ' · '+Number(bridge.avgUnitWeight.toFixed(6))+' g per item' : '')+'. Applied to Ingredients only after receipt approval.' : 'This purchase needs review until a conversion or recipe quantity is confirmed.';
+  };
   const recipeQuantity=()=>{
     const i=chosen(),unit=input('unit').value.trim(),show=!!i && !!unit && M.factor(unit,i.unit)===null && !input('excluded').checked;
     $('#recipe-quantity').hidden=!show;
+    updateBridge();
     if(show) {
-      $('#recipe-quantity-help').textContent='The receipt uses '+unit+'. Recipes use '+i.unit+'. Confirm the usable recipe quantity in ONE purchased pack. This applies only to this product.';
+      $('#recipe-quantity-help').textContent='The receipt uses '+unit+'. Recipes use '+i.unit+'. Alternatively, confirm the usable recipe quantity in ONE purchased pack. This applies only to this product.';
       $('#recipe-pack-label').textContent='Recipe quantity in one pack ('+i.unit+')';
       const pack=num(input('costingPack').value),count=num(input('packageCount').value);
-      $('#recipe-quantity-total').textContent=M.positive(pack)&&M.positive(count) ? 'For recipes: '+pack+' '+i.unit+' × '+count+' packs = '+Number((pack*count).toFixed(8))+' '+i.unit+'.' : 'No count-to-weight or volume-to-weight conversion is assumed.';
+      $('#recipe-quantity-total').textContent=M.positive(pack)&&M.positive(count) ? 'For recipes: '+pack+' '+i.unit+' × '+count+' packs = '+Number((pack*count).toFixed(8))+' '+i.unit+'.' : M.bridgeKind(unit,i.unit) ? 'Leave this blank when using the conversion above.' : 'Confirm the measured recipe quantity in one purchased pack.';
     }
   };
   const recalc=()=>{
@@ -1006,12 +1049,17 @@ function editPurchase(r, index = null) {
     };
     recipeQuantity();
   };
-  input('packSize').oninput=()=>{input('costingConfirmed').checked=false;recalc();};
-  input('packageCount').oninput=recalc;
+  input('packSize').oninput=()=>{input('costingConfirmed').checked=false;input('weightConfirmed').checked=false;recalc();};
+  input('packageCount').oninput=()=>{input('weightConfirmed').checked=false;recalc();};
+  input('size').oninput=()=>{input('weightConfirmed').checked=false;recipeQuantity();};
   input('unit').oninput=()=>{input('costingConfirmed').checked=false;context();};
   input('costingPack').oninput=()=>{input('costingConfirmed').checked=false;recipeQuantity();};
   input('excluded').onchange=recipeQuantity;
   input('newUnit').oninput=context;
+  input('receiptDensity').oninput=()=>{input('densityConfirmed').checked=false;updateBridge();};
+  input('densityConfirmed').onchange=updateBridge;
+  for(const name of ['measuredTotalWeight','measuredItemCount']) input(name).oninput=()=>{input('weightConfirmed').checked=false;updateBridge();};
+  input('weightConfirmed').onchange=updateBridge;
   input('ingredientId').onchange=()=>{
     input('costingPack').value='';input('costingConfirmed').checked=false;
     const i=chosen();if(i&&!input('unit').value) input('unit').value=i.unit;
@@ -1063,7 +1111,7 @@ function editPurchase(r, index = null) {
     };
   };
   input('description').oninput=showMatches;
-  input('productCode').oninput=()=>{input('costingConfirmed').checked=false;showMatches();};
+  input('productCode').oninput=()=>{input('costingConfirmed').checked=false;showMatches();updateBridge();};
   showMatches();context();
 }
 function suggestPurchases(r) {

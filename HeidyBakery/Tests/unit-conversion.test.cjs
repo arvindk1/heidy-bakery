@@ -1,0 +1,60 @@
+const assert=require('node:assert/strict'),M=require('../Resources/model.js'),{fixture,now}=require('./receipt-product-fixture.cjs');
+const clone=x=>JSON.parse(JSON.stringify(x));
+function purchase(id='milk',unit='gal',size=1,code='milk-code') {
+ const s=fixture(),r=s.receipts[0],i=s.ingredients.find(i=>i.id===id);
+ r.lines=[{description:i.name,ingredientId:id,productCode:code,price:10,size,unit,packSize:size,packageCount:1,excluded:false,needsReview:false,priceChangeConfirmed:true,reviewMode:true}];
+ return {s,r,i,l:r.lines[0]};
+}
+for(const [from,to] of [['lb','g'],['kg','oz'],['gal','ml'],['fl oz','cup'],['dozen','each']]) {
+ const old=M.factor(from,to);assert.equal(M.factor(from,to,{density:0,avgUnitWeight:Infinity}),old);assert.equal(M.factor(from,to,{density:1.03,avgUnitWeight:150}),old);
+}
+assert.equal(M.factor('oz','fl oz'),null);assert.equal(M.factor('gal','g'),null);assert.equal(M.factor('each','g'),null);
+assert.equal(M.factor('gal','g',{density:1.03}),3785.411784*1.03);
+assert.equal(M.factor('g','ml',{density:1.03}),1/1.03);
+assert.equal(M.factor('dozen','g',{avgUnitWeight:150}),1800);
+assert.equal(M.factor('kg','each',{avgUnitWeight:150}),1000/150);
+assert.equal(M.factor('pc','g',{avgUnitWeight:150}),150);
+assert.equal(M.factor('each','ml',{density:1,avgUnitWeight:100}),null);
+for(const value of [0,-1,Infinity,NaN,'1.03'])assert.equal(M.factor('gal','g',{density:value}),null);
+const no=purchase();assert.equal(M.purchaseQuantity(no.s,no.r,no.l),null);assert.match(M.receiptIssues(no.s,no.r,now)[0].message,/density/);
+const snapshot=clone(no.s);assert.throws(()=>M.approveReceipt(no.s,no.r,now),/density/);assert.deepEqual(no.s,snapshot);
+assert.equal(M.suggestedDensity('Milk'),1.03);assert.equal(M.suggestedDensity('Condensed Milk'),null);assert.equal(no.i.density,undefined);
+const milk=purchase();milk.l.bridge=M.confirmReceiptBridge(milk.i,milk.r,milk.l,'density',1.03);
+assert.equal(milk.i.density,undefined,'Draft changed ingredient');
+const expected=3785.411784*1.03;assert.deepEqual(M.purchaseQuantity(milk.s,milk.r,milk.l),{size:expected,unit:'g'});
+const recipes=clone(milk.s.recipes);M.approveReceipt(milk.s,milk.r,now);M.validate(milk.s);
+assert.equal(milk.i.density,1.03);assert.equal(milk.i.size,expected);assert.equal(milk.i.unit,'g');assert.equal(M.unitCost(milk.i),10/expected);assert.deepEqual(milk.s.recipes,recipes);
+assert.equal(milk.i.history.at(-1).purchase.unit,'gal');assert.equal(milk.i.history.at(-1).conversion.density,1.03);
+milk.i.density=1.1;assert.equal(M.purchaseQuantity(milk.s,milk.r,milk.l).size,expected,'Density edit rewrote historical conversion');
+const known=purchase();known.i.density=1.03;assert.equal(M.purchaseQuantity(known.s,known.r,known.l).size,expected);M.approveReceipt(known.s,known.r,now);
+const pounds=purchase('milk','lb',2);pounds.i.density=1.03;assert.deepEqual(M.purchaseQuantity(pounds.s,pounds.r,pounds.l),{size:2,unit:'lb'});
+const reverse=purchase('milk','g',1030);reverse.i.unit='ml';reverse.i.density=1.03;assert.equal(M.purchaseQuantity(reverse.s,reverse.r,reverse.l).size,1000);
+const count=purchase('banana','each',6,'2619');assert.equal(M.purchaseQuantity(count.s,count.r,count.l),null);assert.match(M.receiptIssues(count.s,count.r,now)[0].message,/measured total weight/);
+assert.equal(count.i.avgUnitWeight,undefined);
+count.l.bridge=M.confirmReceiptBridge(count.i,count.r,count.l,'avgUnitWeight',900);assert.equal(count.l.bridge.value,150);
+M.approveReceipt(count.s,count.r,now);M.validate(count.s);
+assert.equal(count.i.avgUnitWeight,150);assert.equal(count.i.size,900);assert.equal(count.s.mappings['costco|sku:2619'].avgUnitWeight,150);
+const saved=M.savedProduct(count.s,'Costco','','2619');assert.equal(saved.weightMeasurement.totalWeight,900);assert.equal(saved.weightMeasurement.measuredCount,6);
+const loaded=clone(count.s),again={...clone(count.r),id:'repeat',status:'Needs review',date:'2026-08-25',lines:[]};
+again.lines=[M.suggestReceiptLine(loaded,'Costco',{description:'ORG BANANAS',productCode:'2619',price:20,packSize:6,packageCount:2,size:12,unit:'each',excluded:false})];loaded.receipts.push(again);
+assert.equal(M.purchaseQuantity(loaded,again,again.lines[0]).size,1800);assert.equal(again.lines[0].needsReview,false);
+again.lines[0].priceChangeConfirmed=true;M.approveReceipt(loaded,again,now);M.validate(loaded);
+assert.equal(M.savedProduct(loaded,'Costco','','2619').avgUnitWeight,150,'Second approval dropped remembered weight');
+const cross={...clone(again),status:'Needs review'},line=cross.lines[0];delete line.bridge;
+for(const edit of [{productCode:'other'},{ingredientId:'egg'}])assert.equal(M.purchaseQuantity(loaded,cross,{...line,...edit}),null);
+assert.equal(M.purchaseQuantity(loaded,{...cross,supplier:'GFS'},line),null);
+const noProduct=clone(loaded);delete noProduct.products;noProduct.mappings={};assert.equal(M.purchaseQuantity(noProduct,cross,line),null,'Ingredient average leaked without a product match');
+const stale=purchase('banana','each',6,'2619');stale.l.bridge=M.confirmReceiptBridge(stale.i,stale.r,stale.l,'avgUnitWeight',900);stale.l.size=7;assert.equal(M.purchaseQuantity(stale.s,stale.r,stale.l),null,'Changed count retained original measurement');
+const old=purchase();old.i.updated='2026-09-01';old.i.density=1.04;old.l.bridge=M.confirmReceiptBridge(old.i,old.r,old.l,'density',1.03);M.approveReceipt(old.s,old.r,now);assert.equal(old.i.density,1.04);
+for(const field of ['density','avgUnitWeight'])for(const value of [0,-1,Infinity,'100']){const bad=fixture();bad.ingredients[0][field]=value;assert.throws(()=>M.validate(bad),/Invalid/);}
+const base=Object.assign(M.empty(),clone(require('../Resources/seed.json'))),golden=base.recipes.map(r=>M.calculate(base,r).unit);for(const i of base.ingredients){i.density=1.03;i.avgUnitWeight=150;}assert.deepEqual(base.recipes.map(r=>M.calculate(base,r).unit),golden,'Golden recipe costs changed from optional bridge metadata');
+const guard=fixture();guard.ingredients.find(i=>i.id==='egg').density=1.03;guard.recipes[0].lines[0].unit='ml';assert.equal(M.calculate(guard,guard.recipes[0]).unit,null,'Recipe math used a receipt density');
+const weighed=purchase('croissant','g',600,'rolls');weighed.l.bridge=M.confirmReceiptBridge(weighed.i,weighed.r,weighed.l,'avgUnitWeight',600,12);assert.equal(M.purchaseQuantity(weighed.s,weighed.r,weighed.l).size,12);M.approveReceipt(weighed.s,weighed.r,now);M.validate(weighed.s);assert.equal(weighed.i.avgUnitWeight,50);
+assert.throws(()=>M.confirmReceiptBridge(weighed.i,weighed.r,weighed.l,'avgUnitWeight',700,12),/purchase quantity/);
+const editedWeight=purchase('croissant','g',600,'rolls');editedWeight.l.bridge=M.confirmReceiptBridge(editedWeight.i,editedWeight.r,editedWeight.l,'avgUnitWeight',600,12);editedWeight.l.size=700;assert.equal(M.purchaseQuantity(editedWeight.s,editedWeight.r,editedWeight.l),null,'Changed weight retained original measurement');
+const forget=clone(count.s),product=M.savedProduct(forget,'Costco','','2619');M.changeSavedProduct(forget,product.id,product.revision,{forget:true});assert.equal(M.purchaseQuantity(forget,{...cross,supplier:'Costco'},line),null,'Forgotten measurement was reused');
+const manual=clone(count.s),manualReceipt={...clone(count.r),id:'manual-override',status:'Needs review',date:'2026-08-25'};delete manualReceipt.lines[0].bridge;
+manualReceipt.lines[0].costing={ingredientId:'banana',retailer:'costco',productCode:'2619',purchasePackSize:6,purchaseUnit:'each',packSize:1200,unit:'g',confirmed:true};manual.receipts.push(manualReceipt);
+M.approveReceipt(manual,manualReceipt,now);M.validate(manual);assert.equal(manual.ingredients.find(i=>i.id==='banana').size,1200);assert.equal(M.savedProduct(manual,'Costco','','2619').avgUnitWeight,undefined,'Manual override retained a superseded average');
+assert.equal(M.purchaseQuantity(manual,{...manualReceipt,status:'Needs review'}, {...manualReceipt.lines[0],costing:undefined,packSize:7,size:7}),null);
+console.log('Unit conversion passed: unchanged same-category factors/recipe math, density confirmation and history, missing-value review, measured count learning/reload, retailer/SKU isolation, validation and old receipts.');

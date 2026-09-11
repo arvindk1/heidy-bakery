@@ -51,14 +51,36 @@
   function normalized(s) {
     return String(s || '').trim().toLowerCase().replace(/^wt oz$/, 'oz');
   }
-  function factor(from, to) {
+  function factor(from, to, bridge = null) {
     from = normalized(from);
     to = normalized(to);
     if (!from || !to) return null;
     if (from === to) return 1;
     const a = units[from],
       b = units[to];
-    return a && b && a[0] === b[0] ? a[1] / b[1] : null;
+    if(a && b && a[0] === b[0]) return a[1] / b[1];
+    // Callers must opt into receipt bridges. Recipe callers keep two arguments.
+    if(!bridge) return null;
+    const x=a || (from==='pc' ? ['count',1] : null),y=b || (to==='pc' ? ['count',1] : null);
+    if(!x || !y || x[0]===y[0] || ![x[0],y[0]].includes('mass')) return null;
+    const value=[x[0],y[0]].includes('volume') ? bridge.density : bridge.avgUnitWeight;
+    if(!positive(value)) return null;
+    const result=x[0]==='mass' ? x[1]/(y[1]*value) : x[1]*value/y[1];
+    return positive(result) ? result : null;
+  }
+  function unitCategory(unit) { return units[normalized(unit)]?.[0] || (normalized(unit)==='pc' ? 'count' : ''); }
+  function bridgeKind(from,to) {
+    const pair=[unitCategory(from),unitCategory(to)];
+    return pair.includes('mass') && pair.includes('volume') ? 'density' : pair.includes('mass') && pair.includes('count') ? 'avgUnitWeight' : '';
+  }
+  // Approximate, opt-in suggestions. FAO/INFOODS Density Database v2 (2012).
+  // https://www.fao.org/4/ap815e/ap815e.pdf — products and temperature vary.
+  function suggestedDensity(name) {
+    const key=normalized(name);
+    if(['milk','whole milk','skim milk'].includes(key)) return 1.03;
+    if(key==='water') return 1;
+    if(['oil','olive oil','vegetable oil','grape seed oil'].includes(key)) return .92;
+    return null;
   }
   function unitCost(i) {
     const n = i && nonnegative(i.price) && positive(i.size) && i.unit?.trim() ? i.price / i.size : null;
@@ -256,6 +278,7 @@
       receiptIds = new Set(s.receipts.map(r => r.id));
     const receiptReference = v => v == null || text(v) && receiptIds.has(v);
     for (const i of s.ingredients) {
+      for(const key of ['density','avgUnitWeight']) if(i[key]!=null && !positive(i[key])) throw Error('Invalid '+key+' for '+i.name);
       if (!named(i.name) || !['ingredient', 'packaging'].includes(i.kind)) throw Error('Invalid ingredient record');
       for (const k of ['price', 'size']) if (i[k] !== null && !nonnegative(i[k])) throw Error('Invalid ' + k + ' for ' + i.name);
       if (!text(i.unit) || !text(i.supplier) || !text(i.updated) || i.updated && !validDate(i.updated) || !Array.isArray(i.history) || 'freeConfirmed' in i && typeof i.freeConfirmed !== 'boolean' || !receiptReference(i.receiptId)) throw Error('Invalid ingredient details for ' + i.name);
@@ -278,10 +301,13 @@
     }
     const validCosting = c => object(c) && named(c.ingredientId) && text(c.retailer) && text(c.productCode) &&
       positive(c.purchasePackSize) && named(c.purchaseUnit) && positive(c.packSize) && named(c.unit) && c.confirmed === true;
+    const validBridge=b=>object(b) && ['density','avgUnitWeight'].includes(b.kind) && positive(b.value) && b.confirmed===true && named(b.ingredientId) && text(b.retailer) && text(b.productCode) && named(b.fromUnit) &&
+      (b.kind==='density' || positive(b.totalWeight) && Number.isSafeInteger(b.measuredCount) && b.measuredCount>0 && Math.abs(b.value-b.totalWeight/b.measuredCount)<1e-9);
     for (const r of s.receipts) {
       if (!safeFile(r.file) || !text(r.originalName) || !text(r.supplier) || !text(r.text) || !text(r.date) || r.date && !validDate(r.date) || !['Needs review', 'Reviewed', 'Archived'].includes(r.status) || !Array.isArray(r.lines) || !text(r.importedAt)) throw Error('Invalid receipt details.');
       for (const l of r.lines) if (!object(l) || !text(l.description) || !text(l.ingredientId) || l.ingredientId && !ingredientIds.has(l.ingredientId) || !optionalNumber(l.price) || !optionalNumber(l.size) || !text(l.unit) || typeof l.excluded !== 'boolean' || 'freeConfirmed' in l && typeof l.freeConfirmed !== 'boolean') throw Error('Invalid receipt purchase.');
       for (const l of r.lines) {
+        if(l.bridge!=null && !validBridge(l.bridge)) throw Error('Invalid confirmed receipt conversion.');
         if (l.costing != null && !validCosting(l.costing)) throw Error('Invalid confirmed recipe quantity.');
         if (l.packSize != null && !positive(l.packSize) || l.packageCount != null && (!Number.isInteger(l.packageCount) || l.packageCount < 1)) throw Error('Invalid receipt package size or count.');
         if (l.sourceRows != null && (!Array.isArray(l.sourceRows) || l.sourceRows.some(n=>!Number.isInteger(n) || n<0))) throw Error('Invalid receipt source rows.');
@@ -300,11 +326,15 @@
     }
     for (const v of Object.values(s.mappings)) if (!object(v) || !ingredientIds.has(v.ingredientId) || !positive(v.size) || !named(v.unit) || v.packSize != null && !positive(v.packSize)) throw Error('Invalid saved receipt match.');
     for (const v of Object.values(s.mappings)) if (v.costing != null && !validCosting(v.costing)) throw Error('Invalid saved recipe quantity.');
+    for(const v of Object.values(s.mappings)) for(const key of ['density','avgUnitWeight']) if(v[key]!=null && !positive(v[key])) throw Error('Invalid saved receipt conversion.');
+    for(const v of Object.values(s.mappings)) if(v.avgUnitWeight!=null && (!validBridge(v.weightMeasurement) || v.weightMeasurement.kind!=='avgUnitWeight' || v.weightMeasurement.value!==v.avgUnitWeight)) throw Error('Invalid saved weight measurement.');
     if (s.products != null) {
       const p=s.products;
       if (!object(p) || p.version!==1 || !object(p.records) || !object(p.aliases)) throw Error('Invalid saved products.');
       const codes=new Set();
       for (const [id,v] of Object.entries(p.records)) {
+        for(const key of ['density','avgUnitWeight']) if(v[key]!=null && !positive(v[key])) throw Error('Invalid saved product conversion.');
+        if(v.avgUnitWeight!=null && (!validBridge(v.weightMeasurement) || v.weightMeasurement.kind!=='avgUnitWeight' || v.weightMeasurement.value!==v.avgUnitWeight || v.weightMeasurement.ingredientId!==v.ingredientId || v.weightMeasurement.retailer!==v.retailer || v.weightMeasurement.productCode!==v.productCode)) throw Error('Invalid saved product weight measurement.');
         if(v.requiresConfirmation!=null && typeof v.requiresConfirmation!=='boolean') throw Error('Invalid product confirmation flag.');
         if (!object(v) || v.id!==id || !named(id) || !named(v.retailer) || v.retailer!==retailerKey(v.retailer) || v.namespace!=='receipt' || !text(v.productCode) || v.productCode && !/^[A-Z0-9-]{1,40}$/.test(v.productCode) || !Number.isInteger(v.revision) || v.revision<1 || typeof v.forgotten!=='boolean' || !ingredientIds.has(v.ingredientId) || !positive(v.size) || !named(v.unit) || v.packSize!=null && !positive(v.packSize)) throw Error('Invalid saved product details.');
         if (v.costing!=null && (!validCosting(v.costing) || v.costing.ingredientId!==v.ingredientId || v.costing.retailer!==v.retailer || v.costing.productCode!==v.productCode || v.costing.purchasePackSize!==v.packSize || normalized(v.costing.purchaseUnit)!==normalized(v.unit))) throw Error('Invalid saved product recipe quantity.');
@@ -361,7 +391,7 @@
     return p;
   }
   function mappingValue(v) {
-    return {ingredientId:v.ingredientId,size:v.size,unit:v.unit,...(v.packSize!=null?{packSize:v.packSize}:{}),...(v.costing?{costing:JSON.parse(JSON.stringify(v.costing))}:{})};
+    return {ingredientId:v.ingredientId,size:v.size,unit:v.unit,...(v.packSize!=null?{packSize:v.packSize}:{}),...(v.costing?{costing:JSON.parse(JSON.stringify(v.costing))}:{}),...(v.density!=null?{density:v.density}:{}),...(v.avgUnitWeight!=null?{avgUnitWeight:v.avgUnitWeight,weightMeasurement:JSON.parse(JSON.stringify(v.weightMeasurement))}:{})};
   }
   function sameMapping(a,b) {
     const stable=v=>v && typeof v==='object' ? Object.fromEntries(Object.keys(v).sort().map(k=>[k,stable(v[k])])) : v;
@@ -404,7 +434,14 @@
       ingredientId:l.ingredientId,size:l.size,unit:l.unit,...(positive(l.packSize)&&positive(l.packageCount)?{packSize:l.packSize}:{}),
       ...(costingApplies(r.supplier,l) && code===rememberedCode ? {costing:{...l.costing}}:{}),
       provenance:{source:l.productDetails ? 'Pasted details, confirmed' : 'Receipt purchase, confirmed',receiptId:r.id,date:r.date,confirmedAt:now.toISOString(),text:l.productDetails || l.originalDescription || l.description}};
+    // An explicit per-pack override supersedes a previously learned average.
+    const bridge=!costingApplies(r.supplier,l) || l.bridge ? receiptBridge(s,r,l) : null;
     p.records[id]=v;
+    if(bridge?.density) v.density=bridge.density;
+    if(bridge?.avgUnitWeight && code) {
+      v.avgUnitWeight=bridge.avgUnitWeight;
+      v.weightMeasurement=JSON.parse(JSON.stringify(bridge.measurement));
+    }
     for(const description of [l.description,l.originalDescription?.replace(/^\d{3,}\s+/,'')]) if(description?.trim()) {
       const key=retailer+'|'+normalized(description);
       p.aliases[key]=[...new Set([...(p.aliases[key]||[]),id])];
@@ -416,10 +453,10 @@
     if(!old || old.revision!==revision) throw Error('Saved product changed. Reopen its details and try again.');
     const next=JSON.parse(JSON.stringify(s));next.products=JSON.parse(JSON.stringify(p));
     const v=next.products.records[id];
-    if(change.forget) {v.forgotten=true;delete v.costing;}
+    if(change.forget) {v.forgotten=true;delete v.costing;delete v.avgUnitWeight;delete v.weightMeasurement;}
     else {
       if(!positive(change.packSize) || factor(change.unit,old.unit)===null) throw Error('Enter a positive package size in a compatible purchase unit.');
-      v.packSize=change.packSize;v.size=change.packSize;v.unit=normalized(change.unit);delete v.costing;
+      v.packSize=change.packSize;v.size=change.packSize;v.unit=normalized(change.unit);delete v.costing;delete v.avgUnitWeight;delete v.weightMeasurement;
       v.requiresConfirmation=false;
       v.provenance={source:'Saved package corrected',date:localDate(now),confirmedAt:now.toISOString()};
     }
@@ -511,6 +548,8 @@
     if (changedPack) { line.needsReview = true; line.quantitySource = 'Pack size differs from last purchase'; }
     if (line.parseNote || line.quantityConflict) line.needsReview = true;
     if (!line.unit) line.unit = s.ingredients.find(i=>i.id===match.ingredientId)?.unit || '';
+    const ingredient=s.ingredients.find(i=>i.id===line.ingredientId);
+    if(ingredient && positive(line.size) && factor(line.unit,ingredient.unit)===null && !purchaseQuantity(s,{supplier:retailer},line)) line.needsReview=true;
     return line;
   }
   function costingApplies(retailer, l) {
@@ -523,10 +562,51 @@
   function purchaseQuantity(s, r, l) {
     const i=s.ingredients.find(i=>i.id===l.ingredientId);
     if (!i || !positive(l.size)) return null;
+    const historical=r.status==='Reviewed' && i.history.find(h=>h.receiptId===r.id && h.conversion && positive(h.size) && h.unit);
+    if(historical) return {size:historical.size,unit:historical.unit};
     if (factor(l.unit,i.unit)!==null) return {size:l.size,unit:l.unit};
+    const bridge=receiptBridge(s,r,l);
+    if(l.bridge && !bridge) return null;
+    if(bridge && (l.bridge || !costingApplies(r.supplier,l))) {
+      const conversion=factor(l.unit,i.unit,bridge),size=conversion===null ? null : l.size*conversion;
+      return positive(size) ? {size,unit:i.unit} : null;
+    }
     if (costingApplies(r.supplier,l) && factor(l.costing.unit,i.unit)!==null && positive(l.costing.packSize*l.packageCount))
       return {size:l.costing.packSize*l.packageCount,unit:l.costing.unit};
     return null;
+  }
+  function receiptBridge(s,r,l) {
+    const i=s.ingredients.find(i=>i.id===l.ingredientId);
+    if(!i || !positive(l.size)) return null;
+    const kind=bridgeKind(l.unit,i.unit),b=l.bridge,code=String(l.productCode||'').trim().toUpperCase();
+    if(b) {
+      if(b.kind!==kind || b.confirmed!==true || !positive(b.value) || b.ingredientId!==i.id || b.retailer!==retailerKey(r.supplier) || b.productCode!==code || normalized(b.fromUnit)!==normalized(l.unit)) return null;
+      if(kind==='avgUnitWeight') {
+        const count=unitCategory(l.unit)==='count' ? l.size*(units[normalized(l.unit)]?.[1] || 1) : null;
+        if(!positive(b.totalWeight) || !positive(b.measuredCount) || count!==null && Math.abs(count-b.measuredCount)>1e-9 || Math.abs(b.value-b.totalWeight/b.measuredCount)>1e-9) return null;
+        if(unitCategory(l.unit)==='mass' && Math.abs(b.totalWeight-l.size*factor(l.unit,'g'))>1e-6) return null;
+        return {avgUnitWeight:b.value,measurement:b};
+      }
+      return {density:b.value};
+    }
+    if(kind==='density' && positive(i.density)) return {density:i.density};
+    if(kind==='avgUnitWeight' && code) {
+      const saved=savedProduct(s,r.supplier,l.description,code);
+      if(saved && !saved.requiresConfirmation && saved.productCode===code && saved.ingredientId===i.id && positive(saved.avgUnitWeight) && saved.weightMeasurement) return {avgUnitWeight:saved.avgUnitWeight,measurement:saved.weightMeasurement};
+    }
+    return null;
+  }
+  function confirmReceiptBridge(i,r,l,kind,value,totalCount=null) {
+    if(kind!==bridgeKind(l.unit,i.unit) || !positive(value) || !positive(l.size)) throw Error('Enter a positive conversion and purchase quantity.');
+    const b={kind,value,ingredientId:i.id,retailer:retailerKey(r.supplier),productCode:String(l.productCode||'').trim().toUpperCase(),fromUnit:l.unit,confirmed:true,receiptId:r.id,measuredDate:r.date};
+    if(kind==='avgUnitWeight') {
+      const count=unitCategory(l.unit)==='count' ? l.size*(units[normalized(l.unit)]?.[1] || 1) : totalCount;
+      if(!Number.isSafeInteger(count) || count<1) throw Error('Enter the whole number of items actually purchased.');
+      if(unitCategory(l.unit)==='mass' && Math.abs(value-l.size*factor(l.unit,'g'))>1e-6) throw Error('The measured total must match the purchased weight. Correct the purchase quantity first.');
+      b.totalWeight=value;b.measuredCount=count;b.value=value/count;
+      if(!positive(b.value)) throw Error('Enter a valid measured total weight.');
+    }
+    return b;
   }
   function purchaseChange(s, r, l) {
     const i = s.ingredients.find(x=>x.id===l.ingredientId), quantity=purchaseQuantity(s,r,l), conversion = factor(quantity?.unit, i?.unit), oldCost = unitCost(i);
@@ -767,7 +847,10 @@
       if (l.excluded) return;
       const i = s.ingredients.find(i => i.id === l.ingredientId), name = i?.name || l.description || `Purchase ${index+1}`;
       let message = !i ? 'choose the matching ingredient' : !nonnegative(l.price) ? 'confirm the paid total' : !positive(l.size) || !String(l.unit || '').trim() ? 'enter the total quantity and unit' : l.price === 0 && !l.freeConfirmed ? 'confirm this was free' : l.needsReview ? 'review the extracted details' : '';
-      if (i && i.unit && l.unit && factor(l.unit, i.unit) === null && !purchaseQuantity(s,r,l)) message = 'confirm the quantity for recipes (' + i.unit + ') in one purchased pack; count, weight and volume cannot be interchanged automatically';
+      if (i && i.unit && l.unit && factor(l.unit, i.unit) === null && !purchaseQuantity(s,r,l)) {
+        const kind=bridgeKind(l.unit,i.unit);
+        message=kind==='avgUnitWeight' ? 'enter the measured total weight of the items bought (g) to confirm the quantity for recipes; no per-item weight is assumed' : kind==='density' ? 'confirm a density (g/ml), or the quantity for recipes ('+i.unit+') in one purchased pack' : 'confirm the quantity for recipes (' + i.unit + ') in one purchased pack; count, weight and volume cannot be interchanged automatically';
+      }
       if (i && ids.has(i.id)) message = 'combine repeated purchases of this ingredient into one total';
       if (!message && l.reviewMode && purchaseChange(s,r,l).unusual && !l.priceChangeConfirmed) message = 'check the price change';
       if (l.packSize != null && (!positive(l.packSize) || !positive(l.packageCount) || Math.abs(l.packSize*l.packageCount-l.size) > .000001)) message = 'check pack size × number of packs against the total quantity';
@@ -805,6 +888,7 @@
       l
     } of changes) {
       const quantity=purchaseQuantity(s,r,l);
+      const bridge=receiptBridge(s,r,l),usedBridge=bridge && (!costingApplies(r.supplier,l) || l.bridge) && factor(l.unit,i.unit)===null;
       if (!i.history.some(h => h.date === i.updated && h.price === i.price && h.size === i.size && h.unit === i.unit)) i.history.push({
         date: i.updated,
         supplier: i.supplier,
@@ -820,11 +904,14 @@
         price: l.price,
         size: quantity.size,
         unit: quantity.unit,
-        ...(l.costing ? {purchase:{size:l.size,unit:l.unit,packageCount:l.packageCount}} : {}),
+        ...(l.costing || usedBridge ? {purchase:{size:l.size,unit:l.unit,packageCount:l.packageCount}} : {}),
+        ...(usedBridge ? {conversion:bridge.density ? {density:bridge.density} : {avgUnitWeight:bridge.avgUnitWeight}} : {}),
         receiptId: r.id,
         note: 'Receipt approved'
       });
       if (!i.updated || r.date >= i.updated) Object.assign(i, {
+        ...(usedBridge && bridge.density ? {density:bridge.density} : {}),
+        ...(usedBridge && bridge.avgUnitWeight ? {avgUnitWeight:bridge.avgUnitWeight} : {}),
         price: l.price,
         size: quantity.size,
         unit: quantity.unit,
@@ -938,6 +1025,11 @@
     positive,
     nonnegative,
     factor,
+    unitCategory,
+    bridgeKind,
+    suggestedDensity,
+    receiptBridge,
+    confirmReceiptBridge,
     unitCost,
     calculate,
     margin,

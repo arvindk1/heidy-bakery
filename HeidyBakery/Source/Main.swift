@@ -1078,10 +1078,20 @@ if CommandLine.arguments.contains("--export-fixture"), CommandLine.arguments.cou
       "unit": "g", "confirmed": true,
     ]
     var productState = state
+    // Synthetic measurement fixture, never an application default.
+    let measurement: [String: Any] = [
+      "kind": "avgUnitWeight", "value": 50, "totalWeight": 6000, "measuredCount": 120,
+      "ingredientId": "egg", "retailer": "costco", "productCode": "1025795",
+      "fromUnit": "each", "confirmed": true, "receiptId": "test", "measuredDate": "2026-08-24",
+    ]
     productState["ingredients"] = [[
       "id": "egg", "name": "Egg", "kind": "ingredient", "supplier": "Costco",
       "price": 16.58, "size": 6000, "unit": "g", "updated": "2026-08-24",
-      "history": [[String: Any]](),
+      "avgUnitWeight": 50, "history": [[String: Any]](),
+    ], [
+      "id": "milk", "name": "Milk", "kind": "ingredient", "supplier": "Costco",
+      "price": 10, "size": 1030, "unit": "g", "updated": "2026-08-24",
+      "density": 1.03, "history": [[String: Any]](),
     ]] as [[String: Any]]
     productState["receipts"] = [[
       "id": "test", "file": "test.txt", "originalName": "test.txt", "supplier": "Costco",
@@ -1089,11 +1099,12 @@ if CommandLine.arguments.contains("--export-fixture"), CommandLine.arguments.cou
       "lines": [[
         "description": "KS 5DZ EGGS", "ingredientId": "egg", "productCode": "1025795",
         "price": 16.58, "size": 120, "unit": "each", "packSize": 60,
-        "packageCount": 2, "excluded": false, "costing": costing,
+        "packageCount": 2, "excluded": false, "costing": costing, "bridge": measurement,
       ]] as [[String: Any]],
     ]] as [[String: Any]]
     productState["mappings"] = ["costco|sku:1025795": [
       "ingredientId": "egg", "size": 120, "unit": "each", "packSize": 60, "costing": costing,
+      "avgUnitWeight": 50, "weightMeasurement": measurement,
     ]] as [String: [String: Any]]
     try store.save(productState)
     let migratedProductState = try store.state()

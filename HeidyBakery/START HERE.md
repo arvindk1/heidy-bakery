@@ -50,7 +50,9 @@ Text recognition needs testing with your actual receipts. It never approves purc
 
 Receipt cards lead with the matched ingredient name and retain the original receipt wording underneath. For older drafts, **Review updated suggestions** shows a comparison; apply only the changes you want. A previous quantity from Ingredients is a reference and requires confirmation that it represents one purchased pack.
 
-When purchase and recipe units differ, enter the confirmed usable recipe quantity in one pack. For example, an egg purchase stays recorded by count while recipe costing uses a confirmed weight. The app does not assume egg weights or convert volume to weight automatically. The product setup is remembered after receipt approval. Unmatched purchases can be linked, added as new ingredients, or excluded.
+When volume and weight units differ, **Convert purchase units** lets you enter and confirm a density in grams per millilitre. Common liquids may offer an editable approximation. Select it only if appropriate to the product, then tick the confirmation. Saving a draft does not update Ingredients; approving the receipt saves the accepted density for later purchases. You can edit it on a later receipt without changing earlier purchase history.
+
+When count and weight units differ, enter the **measured total weight of the items bought**, then confirm it. The app derives grams per item from the receipt's total count. There is no suggested item weight. Approval remembers the measured average for that retailer and product code; a later receipt can reuse it. If the product weight changes, enter a new measured total. The existing confirmed recipe quantity per pack remains an alternative. Unmatched purchases can be linked, added as new ingredients, or excluded.
 
 **Export all to Excel** creates an independent workbook with editable inputs and formulas. Open it in Excel to recalculate. The **Read me** sheet explains which sheets to edit. **Export this recipe** exports one recipe and the master items it needs.
 

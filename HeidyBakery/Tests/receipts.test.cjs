@@ -21,5 +21,5 @@ const edited=receipt('Kroger\n09/01/26');edited.supplier='User retailer';edited.
 M.prepareReceipt(s,edited,now);assert.equal(edited.supplier,'User retailer');assert.equal(edited.date,'2026-08-30');assert.equal(edited.lines[0].description,'Keep draft');assert.equal(M.prepareReceipt(s,edited,now),false);
 const reviewed=receipt('Kroger\n09/01/26');reviewed.status='Reviewed';assert.equal(M.prepareReceipt(s,reviewed,now),false);
 const wrong=receipt('');wrong.date='2026-09-01';wrong.supplier='GFS';wrong.lines=[{ingredientId:'butter',description:'Butter',price:3.99,size:1,unit:'each',excluded:false}];
-assert.throws(()=>M.approveReceipt(s,wrong,now),/cannot be interchanged/);
+assert.throws(()=>M.approveReceipt(s,wrong,now),/measured total weight/);
 console.log('Receipt checks passed: retailer/date extraction, legacy/inline columns, totals, duplicate packs, missing/ambiguous/future dates, review requirements, unit compatibility, preserved edits and idempotent draft preparation.');
