@@ -1154,6 +1154,9 @@ function settingsPage() {
       checkInboxAutomatically();
     }
   });
+  const quality=M.ingredientIssues(state);
+  if(quality.length) $('#main').insertAdjacentHTML('beforeend','<div class="note" id="ingredient-quality"><h3>Ingredients to review ('+quality.length+')</h3><ul>'+quality.map(q=>'<li><button class="link" data-quality-item="'+esc(q.ingredientId)+'">'+esc(q.name)+'</button> — '+esc(q.message)+'</li>').join('')+'</ul><p>Use a confirmed package quantity or measurement. Missing details are not estimated.</p></div>');
+  $$('[data-quality-item]').forEach(b=>b.onclick=()=>openIngredientRecord(b.dataset.qualityItem));
   if(state.maintenanceNotices?.length) $('#main').insertAdjacentHTML('beforeend','<div class="note" id="maintenance-notices"><h3>Saved matches need review</h3><ul>'+state.maintenanceNotices.map(n=>'<li>'+esc(n)+'</li>').join('')+'</ul></div>');
   action('#backup', () => busy('Saving complete backup…', async () => {
     await saveTail;
@@ -1432,7 +1435,8 @@ $('#dialog').addEventListener('close', () => {
     if (prepared) { await save('Receipt drafts prepared from recognized text. Review the suggested details.'); migrated = false; }
     if (migrated) await save('Corrected the known Vanilla Paste purchase date typo.');else render();
     startInboxChecks();
-    if(state.maintenanceNotices?.length) notice('Some saved product matches referred to missing ingredients and were removed from suggestions. See Settings for details.',true);
+    const quality=M.ingredientIssues(state);
+    if(quality.length || state.maintenanceNotices?.length) notice([quality.length ? quality.length+' ingredient(s) need package details or identification.' : '',state.maintenanceNotices?.length ? 'Saved matches for missing ingredients were removed from suggestions.' : '','See Settings for details.'].filter(Boolean).join(' '),true);
   } catch (e) {
     $('#main').innerHTML = `<div class="note bad">${esc(e.message)}</div>`;
     $('#save-status').textContent = 'Could not open records';

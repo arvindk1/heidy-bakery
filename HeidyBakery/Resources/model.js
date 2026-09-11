@@ -86,6 +86,15 @@
     const n = i && nonnegative(i.price) && positive(i.size) && i.unit?.trim() ? i.price / i.size : null;
     return finite(n) ? n : null;
   }
+  function ingredientIssues(s) {
+    return s.ingredients.flatMap(i=>{
+      const missing=[];
+      if(!String(i.unit||'').trim()) missing.push('purchase unit');
+      if(!positive(i.size)) missing.push('package quantity');
+      if(/^(Unnamed item — source row|Unidentified ingredient —)/.test(i.name)) missing.push('ingredient identity');
+      return missing.length ? [{ingredientId:i.id,name:i.name,message:'Confirm '+missing.join(', ')+'.'}] : [];
+    });
+  }
   function localDate(date = new Date()) {
     return [date.getFullYear(), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-');
   }
@@ -1054,6 +1063,7 @@
     confirmReceiptBridge,
     clearReceiptCosting,
     unitCost,
+    ingredientIssues,
     calculate,
     margin,
     marginWatch,
