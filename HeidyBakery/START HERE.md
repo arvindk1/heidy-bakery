@@ -48,7 +48,9 @@ Text recognition needs testing with your actual receipts. It never approves purc
 
 ## Excel and backups
 
-Receipt cards lead with the matched ingredient name and retain the original receipt wording underneath. For older drafts, **Review updated suggestions** shows a comparison; apply only the changes you want. A previous quantity from Ingredients is a reference and requires confirmation that it represents one purchased pack.
+Receipt cards lead with the matched ingredient name and retain the original receipt wording underneath. For older drafts, **Review updated suggestions** shows a comparison; apply only the changes you want.
+
+In a purchase review, check the ingredient and paid total, then enter the total quantity purchased. **Use 700 g as total**, for example, copies a previous recorded quantity only when today's entire purchase has that same quantity. It does not multiply the old total by today's pack count. For equal-sized packs, expand **Bought multiple packs?** and enter the pack size and count. Editing the total updates the per-pack calculation. Receipt wording, pasted product details and exclude/free/remove options remain available in their disclosures. **Save purchase review** saves a draft; ingredient prices update only after you approve the receipt.
 
 When volume and weight units differ, **Convert purchase units** lets you enter and confirm a density in grams per millilitre. Common liquids may offer an editable approximation. Select it only if appropriate to the product, then tick the confirmation. Saving a draft does not update Ingredients; approving the receipt saves the accepted density for later purchases. You can edit it on a later receipt without changing earlier purchase history.
 

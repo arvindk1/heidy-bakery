@@ -44,7 +44,7 @@ saved.receipts[0].lines=[{description:'Butter',originalDescription:'384962 BUTTE
   assert.deepEqual(await page.locator('[data-match]').evaluateAll(bs=>bs.map(b=>b.dataset.match)),['butter']);
   await page.locator('[data-match=butter]').click();assert.equal(await page.locator('#match-hints').isVisible(),false);
   assert.equal(await active(),'ingredientId','Choosing a disappearing hint lost keyboard focus');
-  await input('productCode').fill('');await input('description').fill('FLOUR');
+  await page.locator('#receipt-details > summary').click();await input('productCode').fill('');await input('description').fill('FLOUR');
   assert.deepEqual((await page.locator('[data-match]').evaluateAll(bs=>bs.map(b=>b.dataset.match))).sort(),['almond','rice']);
   await page.locator('[data-match=rice]').click();
   assert.equal(await active(),'ingredientId');
@@ -52,8 +52,8 @@ saved.receipts[0].lines=[{description:'Butter',originalDescription:'384962 BUTTE
   await input('description').fill('No matching ingredient xyz');assert.match(await page.locator('#match-hints').innerText(),/Choose an existing ingredient/);
   await page.locator('#dialog-cancel').click();assert.deepEqual(saved,initial);
   await edit();
-  for(const name of ['price','packSize','packageCount','size']){
-    assert.equal(await input(name).getAttribute('aria-describedby'),'pack-calculation');
+  for(const name of ['packSize','packageCount','size']){
+    assert.ok((await input(name).getAttribute('aria-describedby')).includes('pack-calculation'));
     assert.equal(await input(name).evaluate(el=>!!(el.compareDocumentPosition(document.querySelector('[name=productNotes]'))&Node.DOCUMENT_POSITION_FOLLOWING)),true,name+' is below the paste disclosure');
   }
   for(const id of ['density-suggestion','weight-help','recipe-quantity-help','recipe-quantity-total'])assert.equal(await page.locator('#'+id).getAttribute('role'),'status');
@@ -61,15 +61,16 @@ saved.receipts[0].lines=[{description:'Butter',originalDescription:'384962 BUTTE
   assert.equal(await page.locator('[name=productNotes]').isVisible(),false);
   assert.ok(await page.locator('#master-pack-reference p').evaluate(el=>el.classList.contains('muted')));
   assert.ok(await page.locator('#pack-calculation').evaluate(el=>el.classList.contains('muted')));
+  await page.locator('#receipt-details > summary').click();
   assert.ok(await page.getByText('Original: 384962 BUTTER',{exact:true}).evaluate(el=>el.classList.contains('muted')));
   await input('packSize').fill('500');await input('packageCount').fill('3');assert.equal(await input('size').inputValue(),'1500');
-  await page.locator('#use-master-pack').click();assert.equal(await input('size').inputValue(),'5436');
+  await page.locator('#use-master-pack').click();assert.equal(await input('size').inputValue(),'1812');
   for(const scheme of ['light','dark']){
     await page.emulateMedia({colorScheme:scheme});await page.setViewportSize({width:scheme==='light'?1100:760,height:900});
     await page.locator('#dialog').evaluate(el=>el.scrollTop=0);
     await page.screenshot({path:path.join(work,scheme+'-collapsed.png')});
     await page.getByText('Paste product details',{exact:true}).click();
-    for(const id of ['parse-product','use-master-pack']){
+    for(const id of ['parse-product']){
       const style=await page.locator('#'+id).evaluate(el=>({background:getComputedStyle(el).backgroundColor,border:getComputedStyle(el).borderTopColor,minHeight:getComputedStyle(el).minHeight}));
       assert.equal(style.border,'rgba(0, 0, 0, 0)');assert.ok(parseFloat(style.minHeight)>=36);
     }

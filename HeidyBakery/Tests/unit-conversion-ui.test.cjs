@@ -16,7 +16,7 @@ let saved=library('milk','gal',1,'milk-code'),history=[],failNext=false,browser;
  await page.addInitScript(()=>{window.webkit={messageHandlers:{native:{postMessage:m=>window.nativeCall(m).then(window.nativeReply)}}};});
  const input=name=>page.locator('[name='+name+']');
  async function load(id='legacy'){await page.goto('file://'+path.join(root,'Resources/index.html'));await page.locator('#new-recipe').waitFor();await page.evaluate(id=>openReceiptRecord(id),id);await page.locator('#approve-receipt').waitFor();}
- async function edit(){const b=page.locator('[data-edit-purchase="0"]');if(!await b.isVisible())await page.locator('.receipt-ready > summary').click();await b.click();}
+ async function edit(){const b=page.locator('[data-edit-purchase="0"]');if(!await b.isVisible())await page.locator('.receipt-ready > summary').click();await b.click();await page.locator('#purchase-packs').evaluate(el=>el.open=true);await page.locator('#receipt-details').evaluate(el=>el.open=true);}
  async function submit(){await page.locator('#dialog-submit').click();await page.locator('#dialog').waitFor({state:'hidden'});}
  async function approve(){await page.locator('#approve-receipt').click();await submit();}
  await load();const initial=clone(saved);await edit();assert.equal(await input('receiptDensity').inputValue(),'');assert.match(await page.locator('#bridge-result').innerText(),/needs review/);

@@ -239,6 +239,8 @@ const action = (id, fn) => {
 };
 function modal(title, body, onSave, label = 'Save') {
   const d = $('#dialog');
+  delete d.dataset.purpose;
+  d.querySelector('.purchase-save-context')?.remove();
   $('#dialog-title').textContent = title;
   $('#dialog-body').innerHTML = body;
   $('#dialog-error').textContent = '';
@@ -923,22 +925,23 @@ function editPurchase(r, index = null) {
   const body=[
     l.costingNotice ? '<p class="note" role="status">'+esc(l.costingNotice)+'</p>' : '',
     l.parseNote && l.needsReview ? '<p class="small bad">'+esc(l.parseNote)+'</p>' : '',
-    field('Receipt description','description',l.description),
-    l.originalDescription && l.originalDescription!==l.description ? '<p class="small muted">Original: '+esc(l.originalDescription)+'</p>' : '',
-    '<div class="fields two">'+field('Product code (optional)','productCode',l.productCode || '')+'<label>Ingredient / packaging<select name="ingredientId">'+ingredientOptions(null,l.ingredientId)+'<option value="__new__">Add new ingredient…</option></select></label></div>',
-    '<div id="match-hints" class="small"></div>',
-    '<div id="remembered-product" class="spacer"></div>',
-    '<div class="fields three">'+field('Paid total ($)','price',l.price ?? '','number','min="0" step=".01" aria-describedby="pack-calculation"')+field('Size of one pack','packSize',l.packSize ?? '','number','min="0.000001" step="any" aria-describedby="pack-calculation"')+field('Number of packs','packageCount',l.packageCount ?? '','number','min="1" step="1" aria-describedby="pack-calculation"')+'</div>',
-    '<div class="fields two">'+field('Total quantity purchased','size',l.size ?? '','number','min="0.000001" step="any" aria-describedby="pack-calculation"')+field('Purchase unit','unit',l.unit)+'</div>',
-    '<p class="small muted" id="pack-calculation">Enter pack size and count, or the total quantity. Confirm the quantity against the package.</p>',
-    '<details class="spacer"><summary>Paste product details</summary><p class="small muted">Read a package description copied from its label or a retailer page. Confirm it belongs to this receipt product.</p><label>Product details<textarea name="productNotes" maxlength="10000" rows="3">'+esc(l.productNotes || l.productDetails || '')+'</textarea></label><button type="button" class="secondary" id="parse-product">Read package details</button><div id="paste-preview" role="status"></div></details>',
+    '<section class="purchase-identity"><h3>Confirm the purchase</h3><div class="fields two"><label>Ingredient / packaging<select name="ingredientId">'+ingredientOptions(null,l.ingredientId)+'<option value="__new__">Add new ingredient…</option></select></label>'+field('Paid total ($)','price',l.price ?? '','number','min="0" step=".01"')+'</div><div id="match-hints" class="small"></div>',
+    '<details id="receipt-details" '+(!l.description ? 'open' : '')+'><summary>Receipt details <span class="muted">'+esc(l.description || 'Add a description')+'</span></summary>'+field('Receipt description','description',l.description)+field('Product code (optional)','productCode',l.productCode || '')+(l.originalDescription && l.originalDescription!==l.description ? '<p class="small muted">Original: '+esc(l.originalDescription)+'</p>' : '')+'</details>',
     '<div id="new-purchase-ingredient" hidden><div class="fields two">'+field('New ingredient name','newName','')+field('Unit used in recipes','newUnit',l.unit || 'g')+'</div><p class="small">The new ingredient starts without a price. Approving this receipt supplies its first purchase cost.</p></div>',
-    '<div id="master-pack-reference" class="small spacer"></div>',
+    '</section><section id="purchase-quantity" class="quantity-card"><h3>How much did you buy?</h3><p id="quantity-next" role="status"></p>',
+    '<div class="fields two"><label><span id="total-quantity-label">Total quantity purchased</span><input name="size" type="number" min="0.000001" step="any" value="'+(l.size ?? '')+'" aria-describedby="quantity-next pack-calculation"></label>'+field('Purchase unit','unit',l.unit,'text','aria-describedby="quantity-next"')+'</div>',
+    '<div id="master-pack-reference" class="quantity-reference"></div>',
+    '<details id="purchase-packs" '+(l.packageCount>1 || l.quantityConflict ? 'open' : '')+'><summary id="pack-details-label">Bought multiple packs?</summary><p class="small muted">Enter the size of each pack and the number bought. For equal-sized packs, these multiply to the total quantity above.</p><div class="fields two">'+field('Size of one pack','packSize',l.packSize ?? '','number','min="0.000001" step="any" aria-describedby="pack-calculation"')+field('Number of packs','packageCount',l.packageCount ?? 1,'number','min="1" step="1" aria-describedby="pack-calculation"')+'</div></details>',
+    '<p class="small muted" id="pack-calculation">Enter the total quantity, or calculate it from pack size and count.</p>',
     '<div id="unit-bridge" class="note" hidden><strong>Convert purchase units</strong><div id="density-bridge" hidden>'+field('Density (g/ml)','receiptDensity',l.bridge?.kind==='density' ? l.bridge.value : state.ingredients.find(i=>i.id===l.ingredientId)?.density ?? '','number','min="0.000001" step="any"')+'<p class="small" id="density-suggestion" role="status"></p><label class="inline"><input type="checkbox" name="densityConfirmed" '+(l.bridge?.kind==='density' ? 'checked' : '')+'>I accept this density for this ingredient.</label><p class="small">Density is approximate and varies by product. It stays editable; changing it does not rewrite earlier purchases.</p></div><div id="weight-bridge" hidden><p id="weight-help" role="status" class="small"></p>'+field('Measured total weight of the items bought (g)','measuredTotalWeight',l.bridge?.kind==='avgUnitWeight' ? l.bridge.totalWeight : '','number','min="0.000001" step="any"')+'<div id="measured-count" hidden>'+field('Number of items actually bought','measuredItemCount',l.bridge?.kind==='avgUnitWeight' ? l.bridge.measuredCount : '','number','min="1" step="1"')+'</div><label class="inline"><input type="checkbox" name="weightConfirmed" '+(l.bridge?.kind==='avgUnitWeight' ? 'checked' : '')+'>I measured this total weight for these items.</label><p class="small">Use the ingredient amount used in your recipes. No average item weight is supplied automatically.</p></div><p id="bridge-result" class="small" role="status"></p></div>',
     '<div id="recipe-quantity" hidden class="note"><strong>Quantity for recipes</strong><p id="recipe-quantity-help" role="status" class="small"></p><label><span id="recipe-pack-label">Usable quantity in one purchased pack</span><input name="costingPack" type="number" min="0.000001" step="any" value="'+(l.costing?.packSize ?? '')+'"></label><label class="inline"><input type="checkbox" name="costingConfirmed" '+(l.costing?.confirmed ? 'checked' : '')+'>I confirmed this quantity from the package or a measured usable amount.</label><p class="small" id="recipe-quantity-total" role="status"></p></div>',
+    '</section>',
+    '<details class="spacer"><summary>Paste product details</summary><p class="small muted">Read a package description copied from its label or a retailer page. Confirm it belongs to this receipt product.</p><label>Product details<textarea name="productNotes" maxlength="10000" rows="3">'+esc(l.productNotes || l.productDetails || '')+'</textarea></label><button type="button" class="secondary" id="parse-product">Read package details</button><div id="paste-preview" role="status"></div></details>',
+    '<div id="remembered-product"></div>',
+    '<details id="purchase-exceptions" '+(l.excluded || l.freeConfirmed ? 'open' : '')+'><summary>Exclude, free purchase or remove</summary>',
     '<label class="inline"><input name="excluded" type="checkbox" '+(l.excluded ? 'checked' : '')+'>Exclude this purchase from Ingredients</label><label class="inline spacer"><input name="freeConfirmed" type="checkbox" '+(l.freeConfirmed ? 'checked' : '')+'>This purchase was free</label>',
     index!==null ? '<label class="inline spacer"><input type="checkbox" name="remove">Remove this purchase line</label>' : '',
-    '<p class="small">The product match, pack size and any confirmed recipe quantity are remembered after approval.</p>'
+    '</details><div id="purchase-review-summary" class="purchase-review-summary" role="status"></div><p class="small muted" id="purchase-save-help">Ingredient prices update only after you approve the receipt.</p>'
   ].join('');
   modal('Receipt purchase',body,async fd=>{
     r=state.receipts.find(x=>x.id===r.id);
@@ -999,10 +1002,32 @@ function editPurchase(r, index = null) {
       if(newItem) state.ingredients.push(newItem);
       if(index===null) r.lines.push(l);else r.lines[index]=l;
     }
-    await save('Receipt draft saved.');
-  });
+    await save('Purchase review saved. Approve the receipt to update ingredient prices.');
+  },'Save purchase review');
+  $('#dialog').dataset.purpose='receipt-purchase';
+  const saveContext=document.createElement('div');saveContext.className='purchase-save-context';
+  saveContext.append($('#purchase-review-summary'),$('#purchase-save-help'));$('#dialog .dialog-actions').prepend(saveContext);
   const input=name=>$('#dialog [name='+name+']');
   const chosen=()=>input('ingredientId').value==='__new__' ? {name:input('newName').value || 'New ingredient',unit:input('newUnit').value} : state.ingredients.find(i=>i.id===input('ingredientId').value);
+  let quantityOrigin='';
+  const updateQuantityGuide=()=>{
+    const i=chosen(),size=num(input('size').value),unit=input('unit').value.trim(),price=num(input('price').value),count=num(input('packageCount').value),pack=num(input('packSize').value);
+    const category=M.unitCategory(unit),label=category==='mass' ? 'Total weight purchased' : category==='volume' ? 'Total volume purchased' : category==='count' ? 'Total number purchased' : 'Total quantity purchased';
+    $('#total-quantity-label').textContent=label;
+    const skipped=input('excluded').checked || input('remove')?.checked;
+    const missing=!i || !M.positive(size) || !unit;
+    $('#purchase-quantity').classList.toggle('needs-quantity',!skipped&&missing);
+    $('#quantity-next').textContent=skipped ? 'This purchase will not update ingredient prices.' : !i ? 'Next: choose the ingredient above, add a new one, or exclude this purchase.' : price===null ? 'Next: enter the amount paid above.' : !M.positive(size) ? 'Next: enter how much you bought, or use the previous quantity if it matches this purchase.' : !unit ? 'Next: enter the purchase unit.' : M.factor(unit,i.unit)===null ? 'Confirm the conversion below before approving this receipt.' : quantityOrigin || 'Quantity entered. Check it against this purchase, then save your review.';
+    $('#pack-details-label').textContent=count>1 ? count+' packs · check the calculation' : 'Bought multiple packs?';
+    $('#pack-calculation').textContent=M.positive(pack)&&M.positive(count) ? Number(pack.toFixed(6))+' '+unit+' × '+count+' pack'+(count===1?'':'s')+' = '+Number((pack*count).toFixed(6))+' '+unit+' total.' : 'Enter the total quantity, or calculate it from pack size and count.';
+    $('#purchase-review-summary').textContent=input('remove')?.checked ? 'This purchase line will be removed when you save.' : input('excluded').checked ? 'Excluded from ingredient price updates.' : (i?.name || 'Ingredient not selected')+' · '+(price===null ? 'Paid total missing' : money(price))+' for '+(M.positive(size) ? Number(size.toFixed(6))+' '+(unit || '(unit missing)') : 'a quantity still to confirm')+(input('freeConfirmed').checked ? ' · Marked as free' : '');
+  };
+  const totalChanged=()=>{
+    const size=num(input('size').value),count=num(input('packageCount').value);
+    if(M.positive(count)) input('packSize').value=M.positive(size) ? size/count : '';
+    input('costingConfirmed').checked=false;input('weightConfirmed').checked=false;
+    recipeQuantity();
+  };
   let bridgeContext=null;
   const updateBridge=()=>{
     const i=chosen(),unit=input('unit').value.trim(),kind=i ? M.bridgeKind(unit,i.unit) : '',code=input('productCode').value.trim().toUpperCase();
@@ -1031,6 +1056,7 @@ function editPurchase(r, index = null) {
         if(M.positive(count)&&M.positive(weight)) bridge={avgUnitWeight:weight/count};
       } else if(num(input('measuredTotalWeight').value)!==null) bridge=null;
     }
+    updateQuantityGuide();
     const f=M.factor(unit,i.unit,bridge),total=f===null || !M.positive(line.size) ? null : line.size*f;
     $('#bridge-result').textContent=M.positive(total) ? 'Converted purchase: '+Number(total.toFixed(6))+' '+i.unit+(bridge?.avgUnitWeight ? ' · '+Number(bridge.avgUnitWeight.toFixed(6))+' g per item' : '')+'. Applied to Ingredients only after receipt approval.' : 'This purchase needs review until a conversion or recipe quantity is confirmed.';
   };
@@ -1044,8 +1070,10 @@ function editPurchase(r, index = null) {
       const pack=num(input('costingPack').value),count=num(input('packageCount').value);
       $('#recipe-quantity-total').textContent=M.positive(pack)&&M.positive(count) ? 'For recipes: '+pack+' '+i.unit+' × '+count+' packs = '+Number((pack*count).toFixed(8))+' '+i.unit+'.' : M.bridgeKind(unit,i.unit) ? 'Leave this blank when using the conversion above.' : 'Confirm the measured recipe quantity in one purchased pack.';
     }
+    updateQuantityGuide();
   };
   const recalc=()=>{
+    quantityOrigin='';
     const size=num(input('packSize').value),count=num(input('packageCount').value);
     if(M.positive(size)&&M.positive(count)) {
       input('size').value=size*count;
@@ -1056,28 +1084,31 @@ function editPurchase(r, index = null) {
   const context=()=>{
     const isNew=input('ingredientId').value==='__new__',i=chosen();
     $('#new-purchase-ingredient').hidden=isNew ? false : true;
-    $('#master-pack-reference').innerHTML=!isNew && i && M.positive(i.size) ? '<p class="muted">Previous purchase in Ingredients: '+i.size+' '+esc(i.unit)+(i.supplier ? ' · '+esc(i.supplier) : '')+'. Use this only if it represents one pack of this product.</p>'+(!input('unit').value || M.factor(i.unit,input('unit').value)!==null ? '<button type="button" class="secondary" id="use-master-pack">Use this quantity for one pack</button>' : '') : '';
+    const canReuse=!isNew && i && M.positive(i.size) && i.unit && (!input('unit').value || M.factor(i.unit,input('unit').value)!==null);
+    $('#master-pack-reference').innerHTML=!isNew && i && M.positive(i.size) ? '<div><span class="small muted">Previous recorded quantity'+(i.supplier ? ' · '+esc(i.supplier) : '')+'</span><strong>'+i.size+' '+esc(i.unit || 'unit missing')+'</strong><p class="small muted">Use only if today’s entire purchase has this same quantity.</p></div>'+(canReuse ? '<button type="button" class="quantity-shortcut" id="use-master-pack">Use '+i.size+' '+esc(i.unit)+' as total</button>' : '<p class="small muted">The previous quantity uses a different or missing unit. Enter this purchase’s quantity above.</p>') : '';
     if($('#use-master-pack')) $('#use-master-pack').onclick=()=>{
       if(!input('unit').value) input('unit').value=i.unit;
-      input('packSize').value=Number((i.size*M.factor(i.unit,input('unit').value)).toFixed(8));
-      if(!input('packageCount').value) input('packageCount').value='1';
-      recalc();
+      input('size').value=Number((i.size*M.factor(i.unit,input('unit').value)).toPrecision(12));
+      quantityOrigin=i.size+' '+i.unit+' selected as the total for this purchase. You can edit this amount.';
+      totalChanged();input('size').focus({preventScroll:true});
     };
     recipeQuantity();
   };
   input('packSize').oninput=()=>{input('costingConfirmed').checked=false;input('weightConfirmed').checked=false;recalc();};
   input('packageCount').oninput=()=>{input('weightConfirmed').checked=false;recalc();};
-  input('size').oninput=()=>{input('weightConfirmed').checked=false;recipeQuantity();};
-  input('unit').oninput=()=>{input('costingConfirmed').checked=false;context();};
+  input('size').oninput=()=>{quantityOrigin='';totalChanged();};
+  input('unit').oninput=()=>{quantityOrigin='';input('costingConfirmed').checked=false;context();};
   input('costingPack').oninput=()=>{input('costingConfirmed').checked=false;recipeQuantity();};
   input('excluded').onchange=recipeQuantity;
+  input('price').oninput=updateQuantityGuide;input('freeConfirmed').onchange=updateQuantityGuide;
+  if(input('remove')) input('remove').onchange=updateQuantityGuide;
   input('newUnit').oninput=context;
   input('receiptDensity').oninput=()=>{input('densityConfirmed').checked=false;updateBridge();};
   input('densityConfirmed').onchange=updateBridge;
   for(const name of ['measuredTotalWeight','measuredItemCount']) input(name).oninput=()=>{input('weightConfirmed').checked=false;updateBridge();};
   input('weightConfirmed').onchange=updateBridge;
   input('ingredientId').onchange=()=>{
-    input('costingPack').value='';input('costingConfirmed').checked=false;
+    quantityOrigin='';input('costingPack').value='';input('costingConfirmed').checked=false;
     const i=chosen();if(i&&!input('unit').value) input('unit').value=i.unit;
     context();
     renderMatchHints();
@@ -1131,11 +1162,15 @@ function editPurchase(r, index = null) {
       input('costingPack').value='';input('costingConfirmed').checked=false;
       pasteApplied={...result,code,ingredientId};recalc();context();
       area.textContent='Applied to this draft. Save the purchase, then approve the receipt to update Ingredients.';
+      input('size').focus();
     };
   };
   input('description').oninput=showMatches;
   input('productCode').oninput=()=>{input('costingConfirmed').checked=false;showMatches();updateBridge();};
   showMatches();context();
+  if(!l.ingredientId) input('ingredientId').focus({preventScroll:true});
+  else if(l.price===null || l.price===undefined) input('price').focus({preventScroll:true});
+  else if(!M.positive(l.size)) input('size').focus({preventScroll:true});
 }
 function suggestPurchases(r) {
   const proposals = M.receiptReconciliation(state, r),before=JSON.stringify(r);

@@ -8,7 +8,7 @@ try {
  async function submit(){document.querySelector('#dialog-form').requestSubmit();await until(()=>!document.querySelector('#dialog').open,'Dialog save');await saveTail;}
  async function approve(){document.querySelector('#approve-receipt').click();await until(()=>document.querySelector('#dialog').open,'Approval preview');await submit();}
  function edit(){const ready=document.querySelector('.receipt-ready');if(ready)ready.open=true;document.querySelector('[data-edit-purchase="0"]').click();}
- await until(()=>state && appVersion.version,'App load');check(appVersion.version==='0.3.7'&&appVersion.build==='10','Build version');
+ await until(()=>state && appVersion.version,'App load');check(appVersion.version==='0.3.8'&&appVersion.build==='11','Build version');
  const existing=(await native('load')).state;check(!existing || !existing.ingredients.length && !existing.receipts.length,'Refusing to replace a nonempty library');
  state=M.empty();state.imported=true;
  state.ingredients=['milk','banana'].map(id=>({id,name:id==='milk'?'Milk':'Banana',kind:'ingredient',supplier:'Costco',price:10,size:1000,unit:'g',updated:'2026-07-01',history:[]}));

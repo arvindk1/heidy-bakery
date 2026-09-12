@@ -19,7 +19,7 @@ fs.mkdirSync(work,{recursive:true});let browser,page,saved=fixture(),history=[],
  await page.addInitScript(()=>{window.webkit={messageHandlers:{native:{postMessage:m=>window.nativeCall(m).then(window.nativeReply)}}};});
  async function load(id='legacy'){await page.goto('file://'+path.join(root,'Resources/index.html'));await page.locator('#new-recipe').waitFor();await page.evaluate(id=>openReceiptRecord(id),id);await page.locator('#approve-receipt').waitFor();}
  async function submit(){await page.locator('#dialog-submit').click();await page.locator('#dialog').waitFor({state:'hidden'});}
- async function edit(n){await page.locator('[data-edit-purchase="'+n+'"]').click();}
+ async function edit(n){await page.locator('[data-edit-purchase="'+n+'"]').click();await page.locator('#purchase-packs').evaluate(el=>el.open=true);}
  await load();
  await page.locator('.purchase strong').getByText('Butter',{exact:true}).waitFor();
  await page.locator('.purchase strong').getByText('Suggested: Croissant',{exact:true}).waitFor();
@@ -29,7 +29,7 @@ fs.mkdirSync(work,{recursive:true});let browser,page,saved=fixture(),history=[],
  assert.equal(saved.receipts[0].lines.find(l=>l.ingredientId==='cream').unit,'qt');assert.equal(saved.receipts[0].lines[0].description,'3 WHOLE MILK');
  assert.deepEqual(saved.ingredients,original.ingredients);assert.equal(Object.keys(saved.mappings).length,0);
  const butterIndex=saved.receipts[0].lines.findIndex(l=>l.ingredientId==='butter');
- await edit(butterIndex);assert.equal(await page.locator('[name=packSize]').inputValue(),'');await page.locator('#use-master-pack').click();assert.equal(await page.locator('[name=packSize]').inputValue(),'1812');assert.equal(await page.locator('[name=size]').inputValue(),'3624');await page.locator('#dialog-cancel').click();assert.equal(saved.receipts[0].lines[butterIndex].size,null,'Reference was applied on cancel');
+ await edit(butterIndex);assert.equal(await page.locator('[name=packSize]').inputValue(),'');await page.locator('#use-master-pack').click();assert.equal(await page.locator('[name=packSize]').inputValue(),'906');assert.equal(await page.locator('[name=size]').inputValue(),'1812');await page.locator('#dialog-cancel').click();assert.equal(saved.receipts[0].lines[butterIndex].size,null,'Reference was applied on cancel');
  const croissantIndex=saved.receipts[0].lines.findIndex(l=>l.productCode==='1199652');
  await edit(croissantIndex);await page.locator('[data-match=croissant]').click();await page.locator('#use-master-pack').click();await submit();assert.equal(saved.receipts[0].lines[croissantIndex].ingredientId,'croissant');assert.equal(saved.receipts[0].lines[croissantIndex].size,12);assert.equal(saved.ingredients.find(i=>i.id==='croissant').price,10);
  // Create a missing master item explicitly; its receipt is still unapproved.
