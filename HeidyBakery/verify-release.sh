@@ -16,7 +16,7 @@ ditto -x -k "$ARCHIVE" "$CHECK_DIR/unpacked"
 APP="$CHECK_DIR/unpacked/Heidy Bakery.app"
 BIN="$APP/Contents/MacOS/HeidyBakery"
 test -x "$BIN"
-lipo "$BIN" -verify_arch arm64 x86_64
+for ARCH in arm64 x86_64; do lipo "$BIN" -verify_arch "$ARCH"; done
 codesign --verify --deep --strict "$APP"
 codesign -dv --verbose=4 "$APP" >"$CHECK_DIR/signature.txt" 2>&1
 # A valid ad-hoc signature alone is not a distribution signature.

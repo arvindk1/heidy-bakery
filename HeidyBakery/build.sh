@@ -80,7 +80,7 @@ unzip -tq "$ARCHIVE"
 ditto -x -k "$ARCHIVE" "$BUILD_DIR/unpacked"
 UNPACKED_APP="$BUILD_DIR/unpacked/Heidy Bakery.app"
 test -x "$UNPACKED_APP/Contents/MacOS/HeidyBakery"
-lipo "$UNPACKED_APP/Contents/MacOS/HeidyBakery" -verify_arch arm64 x86_64
+for ARCH in arm64 x86_64; do lipo "$UNPACKED_APP/Contents/MacOS/HeidyBakery" -verify_arch "$ARCH"; done
 cmp "$STAGED_APP/Contents/MacOS/HeidyBakery" "$UNPACKED_APP/Contents/MacOS/HeidyBakery"
 codesign --verify --deep --strict "$UNPACKED_APP"
 HEIDY_DATA_DIR="$BUILD_DIR/unpacked-tests" "$UNPACKED_APP/Contents/MacOS/HeidyBakery" --self-test

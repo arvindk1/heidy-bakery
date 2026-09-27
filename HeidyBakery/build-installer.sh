@@ -31,7 +31,7 @@ test -d "$APP" || {
 # Package only the app extracted from the verified release ZIP. User records
 # live outside the app bundle and are deliberately absent from the payload.
 codesign --verify --deep --strict "$APP"
-lipo "$APP/Contents/MacOS/HeidyBakery" -verify_arch arm64 x86_64
+for ARCH in arm64 x86_64; do lipo "$APP/Contents/MacOS/HeidyBakery" -verify_arch "$ARCH"; done
 cmp "$PROJECT_DIR/Info.plist" "$APP/Contents/Info.plist"
 
 if [ "$MODE" = --release ]; then
