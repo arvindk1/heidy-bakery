@@ -1,0 +1,24 @@
+#!/bin/bash
+set -euo pipefail
+
+# Installer supplies the target volume as argument 3. Never delete the main
+# bundle ourselves: PackageKit replaces it using its upgrade semantics.
+target_volume="${3:?Installer target volume is required}"
+case "$target_volume" in /*) ;; *) exit 1 ;; esac
+applications_dir="${target_volume%/}/Applications"
+installed_app="$applications_dir/Heidy Bakery.app"
+test -d "$applications_dir" && test ! -L "$applications_dir"
+test -d "$installed_app" && test ! -L "$installed_app"
+test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$installed_app/Contents/Info.plist")" = 'com.heidybakery.local'
+/usr/bin/codesign --verify --deep --strict "$installed_app"
+
+# Delete only matching duplicate app bundles directly inside Applications,
+# after successful installation. Never scan user folders or follow symlinks.
+for existing_app in "$applications_dir"/Heidy\ Bakery*.app; do
+  [ "$existing_app" != "$installed_app" ] || continue
+  [ -d "$existing_app" ] && [ ! -L "$existing_app" ] || continue
+  existing_bundle_id="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$existing_app/Contents/Info.plist" 2>/dev/null || true)"
+  if [ "$existing_bundle_id" = 'com.heidybakery.local' ]; then
+    /bin/rm -rf -- "$existing_app"
+  fi
+done

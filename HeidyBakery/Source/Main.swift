@@ -368,7 +368,9 @@ final class WorkbookXML: NSObject, XMLParserDelegate {
   var sheets: [String: String] = [:], rels: [String: String] = [:], strings: [String] = [],
     rows: [[Any]] = []
   var text = "", type = "", ref = "", value = "", row: [Any] = [], inText = false, inValue = false,
-    inSI = false, shared = "", hasFormula = false
+    inSI = false, inFormula = false, formulaText = "", formulaGroup = "", shared = "", hasFormula = false
+  var sharedFormulas: [String: String] = [:]
+  var invalidRow = false
   var sharedStrings: [String] = []
   func parser(
     _ p: XMLParser, didStartElement e: String, namespaceURI: String?, qualifiedName: String?,
@@ -376,14 +378,22 @@ final class WorkbookXML: NSObject, XMLParserDelegate {
   ) {
     if e == "sheet" { sheets[a["name"] ?? ""] = a["r:id"] ?? "" }
     if e == "Relationship" { rels[a["Id"] ?? ""] = a["Target"] ?? "" }
-    if e == "row" { row = [] }
+    if e == "row" {
+      row = []
+      // Excel may omit blank rows. Keep cell references aligned with array indices.
+      let number = Int(a["r"] ?? "") ?? rows.count + 1
+      guard number > rows.count, number <= 20000 else { invalidRow = true; p.abortParsing(); return }
+      while rows.count < number - 1 { rows.append([]) }
+    }
     if e == "c" {
       type = a["t"] ?? ""
       ref = a["r"] ?? ""
       value = ""
       hasFormula = false
+      formulaText = ""
+      formulaGroup = ""
     }
-    if e == "f" { hasFormula = true }
+    if e == "f" { hasFormula = true; inFormula = true; formulaGroup = a["si"] ?? "" }
     if e == "si" {
       inSI = true
       shared = ""
@@ -392,13 +402,15 @@ final class WorkbookXML: NSObject, XMLParserDelegate {
     if e == "v" { inValue = true }
   }
   func parser(_ p: XMLParser, foundCharacters s: String) {
-    if inSI && inText { shared += s } else if inText || inValue { value += s }
+    if inSI && inText { shared += s } else if inFormula { formulaText += s }
+    else if inText || inValue { value += s }
   }
   func parser(
     _ p: XMLParser, didEndElement e: String, namespaceURI: String?, qualifiedName: String?
   ) {
     if e == "t" { inText = false }
     if e == "v" { inValue = false }
+    if e == "f" { inFormula = false }
     if e == "si" {
       strings.append(shared)
       inSI = false
@@ -411,7 +423,13 @@ final class WorkbookXML: NSObject, XMLParserDelegate {
       guard col > 0, col <= 100 else { return }
       while row.count < col { row.append(NSNull()) }
       if hasFormula {
-        row[col - 1] = ["formula": true, "cached": value]
+        if !formulaGroup.isEmpty {
+          if !formulaText.isEmpty { sharedFormulas[formulaGroup] = formulaText }
+          else if let original = sharedFormulas[formulaGroup], original.range(of: "^\\$B\\$[0-9]+$", options: .regularExpression) != nil {
+            formulaText = original
+          }
+        }
+        row[col - 1] = ["formula": true, "formulaText": formulaText, "cached": value]
       } else if type == "s", let n = Int(value), n >= 0, n < sharedStrings.count {
         row[col - 1] = sharedStrings[n]
       } else if type == "inlineStr" || type == "str" {
@@ -431,7 +449,7 @@ final class WorkbookXML: NSObject, XMLParserDelegate {
     let p = XMLParser(data: data)
     p.shouldResolveExternalEntities = false
     p.delegate = d
-    guard p.parse() else { throw failure("Could not read workbook XML.") }
+    guard p.parse() else { throw failure(d.invalidRow ? "Worksheet has invalid or excessive row numbers." : "Could not read workbook XML.") }
     return d
   }
 }
@@ -455,6 +473,33 @@ func readWorkbook(_ file: URL) throws -> [String: Any] {
     result[name] = try WorkbookXML.read(entry(path), shared: shared).rows
   }
   return result
+}
+
+// A separate, read-only path for Heidy's original one-recipe-per-sheet workbooks.
+// The app decides what to save only after a browser-side review.
+func readRecipeWorkbook(_ file: URL) throws -> [String: Any] {
+  let size = (try file.resourceValues(forKeys: [.fileSizeKey])).fileSize ?? 0
+  guard size < 20_000_000 else { throw failure("Choose a workbook smaller than 20 MB.") }
+  func entry(_ name: String) throws -> Data {
+    do { return try run("/usr/bin/unzip", ["-p", file.path, name]) }
+    catch { throw failure("Could not read \(file.lastPathComponent) as an Excel workbook. No records were changed.") }
+  }
+  let wb = try WorkbookXML.read(entry("xl/workbook.xml"))
+  let rels = try WorkbookXML.read(entry("xl/_rels/workbook.xml.rels"))
+  let shared = (try? WorkbookXML.read(entry("xl/sharedStrings.xml")).strings) ?? []
+  guard wb.sheets.count <= 150 else { throw failure("This workbook has too many sheets. No records were changed.") }
+  var sheets: [[String: Any]] = []
+  for name in wb.sheets.keys.sorted() {
+    guard let id = wb.sheets[name], let target = rels.rels[id], !target.contains(".."),
+      !target.contains("\\"), target.rangeOfCharacter(from: CharacterSet(charactersIn: "*?[]")) == nil
+    else { throw failure("Invalid worksheet path. No records were changed.") }
+    let path = target.hasPrefix("/") ? String(target.dropFirst()) : "xl/" + target
+    var rows = try WorkbookXML.read(entry(path), shared: shared).rows
+    while let last = rows.last, last.allSatisfy({ $0 is NSNull || ($0 as? String)?.isEmpty == true }) { rows.removeLast() }
+    guard rows.count <= 2000 else { throw failure("\(name) has more than 2,000 populated rows. No recipe data was truncated; choose a smaller workbook.") }
+    sheets.append(["name": name, "rows": rows])
+  }
+  return ["file": file.lastPathComponent, "sheets": sheets]
 }
 
 final class ReceiptScanner {
@@ -897,6 +942,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         } else {
           reply(id)
         }
+      case "importRecipeWorkbooks":
+        let p = NSOpenPanel()
+        p.title = "Choose recipe workbooks (Cake, Bread, Cookie & Others)"
+        p.message = "You can select more than one .xlsx file. You will review recipes before saving."
+        p.canChooseDirectories = false
+        p.allowsMultipleSelection = true
+        p.allowedContentTypes = [UTType(filenameExtension: "xlsx")!]
+        if p.runModal() == .OK {
+          guard p.urls.count <= 10 else { throw failure("Select at most 10 workbooks at once.") }
+          reply(id, try p.urls.map { try readRecipeWorkbook($0) })
+        } else { reply(id) }
       case "backup":
         if let url = panel(
           "Save a full bakery backup", save: true, name: "Heidy Bakery \(Self.today()).heidybackup")
@@ -1061,6 +1117,15 @@ if CommandLine.arguments.contains("--export-fixture"), CommandLine.arguments.cou
 } else if CommandLine.arguments.contains("--read-fixture"), CommandLine.arguments.count == 3 {
   do {
     let p = try readWorkbook(URL(fileURLWithPath: CommandLine.arguments[2]))
+    print(String(decoding: try jsonData(p), as: UTF8.self))
+    exit(0)
+  } catch {
+    fputs(error.localizedDescription + "\n", stderr)
+    exit(1)
+  }
+} else if CommandLine.arguments.contains("--read-recipe-fixture"), CommandLine.arguments.count == 3 {
+  do {
+    let p = try readRecipeWorkbook(URL(fileURLWithPath: CommandLine.arguments[2]))
     print(String(decoding: try jsonData(p), as: UTF8.self))
     exit(0)
   } catch {

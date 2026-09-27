@@ -2,8 +2,10 @@
   "name": "heidy-bakery",
   "private": true,
   "scripts": {
-    "test": "node Tests/hardening.test.cjs && node Tests/model.test.cjs && node Tests/regression.test.cjs && node Tests/receipts.test.cjs && node Tests/receipt-learning.test.cjs && node Tests/receipt-parsing.test.cjs && node Tests/receipt-products.test.cjs && node Tests/saved-products.test.cjs && node Tests/unit-conversion.test.cjs && node Tests/margin-watch.test.cjs && node Tests/refresh-contrast.test.cjs",
+    "test": "node Tests/hardening.test.cjs && node Tests/model.test.cjs && node Tests/recipe-import.test.cjs && node Tests/regression.test.cjs && node Tests/receipts.test.cjs && node Tests/receipt-learning.test.cjs && node Tests/receipt-parsing.test.cjs && node Tests/receipt-products.test.cjs && node Tests/saved-products.test.cjs && node Tests/unit-conversion.test.cjs && node Tests/margin-watch.test.cjs && node Tests/refresh-contrast.test.cjs",
     "build": "bash build.sh",
-    "test:ui": "node Tests/ui-regression.cjs && node Tests/receipt-ui.test.cjs && node Tests/receipt-products-ui.test.cjs && node Tests/saved-products-ui.test.cjs && node Tests/unit-conversion-ui.test.cjs && node Tests/receipt-modal-ui.test.cjs && node Tests/quantity-story-ui.test.cjs && node Tests/automatic-backup-ui.test.cjs && node Tests/excel-ui.test.cjs"
+    "build:installer": "bash build-installer.sh",
+    "test:installer": "bash build-installer.sh --local",
+    "test:ui": "node Tests/ui-regression.cjs && node Tests/receipt-ui.test.cjs && node Tests/receipt-products-ui.test.cjs && node Tests/saved-products-ui.test.cjs && node Tests/unit-conversion-ui.test.cjs && node Tests/receipt-modal-ui.test.cjs && node Tests/quantity-story-ui.test.cjs && node Tests/automatic-backup-ui.test.cjs && node Tests/excel-ui.test.cjs && node Tests/recipe-import-ui.test.cjs"
   }
 }

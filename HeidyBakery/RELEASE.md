@@ -11,9 +11,12 @@ Run `./build.sh --local` (also the default). This builds `Heidy Bakery.app` and 
 Verified September 9, 2026. Credentials are saved in Keychain under the exact profile **`HeidyBakery-notary`**. Use `--keychain-profile "HeidyBakery-notary"`; do not search or dump the Keychain to discover credentials.
 
 - Signing identity: `Developer ID Application: Arvind Kandula (7LBQ52WL9X)`
+- Installer identity: `Developer ID Installer: Arvind Kandula (7LBQ52WL9X)`
 - Team: `7LBQ52WL9X`
 - Check access: `xcrun notarytool history --keychain-profile "HeidyBakery-notary"`
 - Build: `HEIDY_SIGN_IDENTITY='Developer ID Application: Arvind Kandula (7LBQ52WL9X)' HEIDY_NOTARY_PROFILE='HeidyBakery-notary' ./build.sh --release`
+- Build the easier update installer after the app release succeeds:
+  `HEIDY_SIGN_IDENTITY='Developer ID Application: Arvind Kandula (7LBQ52WL9X)' HEIDY_INSTALLER_IDENTITY='Developer ID Installer: Arvind Kandula (7LBQ52WL9X)' HEIDY_NOTARY_PROFILE='HeidyBakery-notary' ./build-installer.sh --release`
 
 If this exact profile is unavailable, ask the owner to restore it interactively using the setup below. Never record the app-specific password in source, documentation or chat.
 
@@ -39,6 +42,39 @@ The script checks the identity and Keychain profile before compiling. It builds 
 Apple submission results are retained in `../release-reports/`. A failed or timed-out submission produces no new distribution ZIP. If an older verified release exists, it remains the previous release; check the build's exit status and package timestamp before sharing. For a timeout, use the submission ID with `xcrun notarytool info` or `log` and the same Keychain profile to investigate.
 
 Send only the successfully verified **Heidy Bakery Mac.zip**. Ask the recipient to download/unzip directly on her Mac, move the app into Applications, then open it. The release does not include bakery databases or receipt originals.
+
+For routine updates, build the installer from the successfully verified release
+ZIP and send **Heidy Bakery Installer.pkg** instead. It installs the app at
+`/Applications/Heidy Bakery.app` and uses
+upgrade semantics for the fixed bundle identifier, so an existing copy is
+replaced without a drag-and-drop choice. The package contains no Application
+Support data, receipts, recipes or settings; those remain in place. The user
+opens the `.pkg`, completes Installer, then launches the app from Applications.
+
+The installer replaces the canonical app through PackageKit. Its postinstall
+script first checks the installed app's bundle identifier and signature, then
+removes duplicate `Heidy Bakery*.app` directories directly inside Applications
+only when their bundle identifier is `com.heidybakery.local`. It skips symlinks
+and unrelated apps. Downloads, Desktop and nested folders are not scanned.
+It does not delete the canonical app before installation. Expanded-package
+verification runs cleanup behavior tests in a temporary volume fixture,
+including missing/corrupt installed app, unrelated apps, symlinks, user data
+preservation and repeat execution. This is not a full Installer transaction test
+on Heidy's Mac.
+
+Before sharing, both the installer and its contained app must have the correct
+Developer ID identities, and the installer must be Accepted by notarytool,
+stapled and accepted by Gatekeeper. Send the final `.pkg` only after
+`Heidy Bakery Installer.pkg.verification.txt` reports PASS. A file containing
+`LOCAL TEST` is never distributable.
+
+Signing uses the existing private key. If productbuild pauses before writing
+the signed product, check for a macOS Keychain authorization prompt. Do not
+describe this as a notarization wait: Apple submission has not started yet.
+The specific `/usr/bin/productbuild` executable may need permission to use
+that key; do not grant every application access. Unlocking the screen alone
+does not approve a pending Keychain prompt. Never create replacement
+certificates or request passwords in chat to solve this.
 
 ## Remaining real-world verification
 

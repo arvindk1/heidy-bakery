@@ -26,6 +26,7 @@ ARCHIVE="$BUILD_DIR/Heidy Bakery Mac.zip"
 trap 'rm -rf "$BUILD_DIR"' EXIT
 mkdir -p "$STAGED_APP/Contents/MacOS" "$STAGED_APP/Contents/Resources"
 node "$PROJECT_DIR/Tests/model.test.cjs"
+node "$PROJECT_DIR/Tests/recipe-import.test.cjs"
 node "$PROJECT_DIR/Tests/regression.test.cjs"
 node "$PROJECT_DIR/Tests/receipts.test.cjs"
 node "$PROJECT_DIR/Tests/receipt-learning.test.cjs"

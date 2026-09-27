@@ -2,6 +2,7 @@
 
 test:
 	node Tests/model.test.cjs
+	node Tests/recipe-import.test.cjs
 	node Tests/regression.test.cjs
 	node Tests/receipts.test.cjs
 	node Tests/receipt-learning.test.cjs

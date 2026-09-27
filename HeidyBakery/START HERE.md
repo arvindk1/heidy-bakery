@@ -58,7 +58,9 @@ When count and weight units differ, enter the **measured total weight of the ite
 
 **Export all to Excel** creates an independent workbook with editable inputs and formulas. Open it in Excel to recalculate. The **Read me** sheet explains which sheets to edit. **Export this recipe** exports one recipe and the master items it needs.
 
-**Review Excel import** accepts this app’s export format. Keep identifiers unchanged. Enter input values, not formulas, in the input columns. The app previews counts and incomplete-cost checks before applying. Existing recipes imported from the workbook have their recipe lines replaced; records not present in the workbook remain in the app.
+**Import recipe workbooks** in Recipes accepts the original Cake, Bread, and Cookie & Others files, with one recipe per sheet. You can select all three files together. The review shows recipe lines, batch yield, labour and a listed price when there is one clear match. New recipes are selected when there are no findings; recipes already in the app or needing review start unchecked. Choosing an existing recipe replaces its recipe details but keeps your current selling prices. Missing materials can be added as unpriced master items only if you check that option. Review selling units, missing costs and ambiguous prices before importing. The original workbooks and master purchase prices stay unchanged.
+
+**Reimport an app Excel export** in Settings accepts only this app’s export format. Keep identifiers unchanged. Enter input values, not formulas, in the input columns. The app previews counts and incomplete-cost checks before applying. Existing recipes imported from the workbook have their recipe lines replaced; records not present in the workbook remain in the app. This action can also change master costs and settings.
 
 **Save full backup** preserves the bakery records and original receipts together. Save it somewhere safe, such as iCloud Drive. A full backup is different from an Excel export: Excel does not contain receipt originals or complete audit history.
 

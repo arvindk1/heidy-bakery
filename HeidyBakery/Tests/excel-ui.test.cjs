@@ -26,7 +26,7 @@ let browser;
  }return{id,result};}catch(e){return{id,error:e.stderr?.toString().trim()||e.message};}});
  await page.addInitScript(()=>{window.webkit={messageHandlers:{native:{postMessage:m=>window.nativeCall(m).then(window.nativeReply)}}};});
  async function open(){await page.goto('file://'+path.join(root,'Resources/index.html'));await page.locator('#new-recipe').waitFor();}
- async function chooseImport(file){selectedImport=file;await page.locator('[data-tab=recipes]').click();await page.locator('#import-recipes').click();}
+ async function chooseImport(file){selectedImport=file;await page.locator('[data-tab=settings]').click();await page.locator('#import-excel').click();}
  async function apply(){await page.locator('#dialog-submit').click();await page.locator('#dialog').waitFor({state:'hidden'});await page.waitForFunction(()=>document.querySelector('#save-status').textContent==='Saved on this Mac');}
  await open();await page.locator('#excel-prices').click();assert.equal(exports.length,1);assert.equal(read(exports[0].file).Recipes.length,3);
  await page.locator('[data-tab=settings]').click();await page.locator('#export-all').click();assert.equal(exports.length,2);assert.deepEqual(read(exports[0].file),read(exports[1].file));
@@ -39,7 +39,7 @@ let browser;
  const editedFile=write(edited,'edited');await chooseImport(editedFile);const before=clone(saved);await page.locator('#dialog-cancel').click();assert.deepEqual(saved,before);
  await chooseImport(editedFile);await apply();assert.equal(saved.recipes[0].retail,7.5);
  await chooseImport(exports[2].file);await apply();assert.equal(saved.recipes.length,2);
- const calls=saveCalls;await chooseImport(null);assert.equal(saveCalls,calls);cancelExport=true;await page.locator('#export-recipe').click();assert.equal(exports.length,3);cancelExport=false;
+ const calls=saveCalls;await chooseImport(null);assert.equal(saveCalls,calls);cancelExport=true;await page.locator('[data-tab=recipes]').click();await page.locator('#export-recipe').click();assert.equal(exports.length,3);cancelExport=false;
  const stable=clone(saved),invalids=[];
  for(const [name,change] of [
  ['missing-sheet',b=>{b.sheets=b.sheets.filter(s=>s.name!=='Ingredients');}],
