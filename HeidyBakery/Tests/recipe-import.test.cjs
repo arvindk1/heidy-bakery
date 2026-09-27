@@ -79,4 +79,11 @@ const duplicate=clone(book);duplicate.sheets[0].rows.push(['Buns']);d=R.parse([d
 const dupMaster=clone(state);dupMaster.ingredients.push({...clone(master),id:'flour-2'});
 const amb=R.plan(dupMaster,R.parse([book]).drafts);assert.ok(amb.drafts[0].blockingIssues.length);assert.throws(()=>R.candidate(dupMaster,amb.drafts,true),/multiple master/);
 for(const expression of ['$B$17','B17','=B$17','=$B17']) {const b=clone(book);b.sheets[1].rows[11][1].formulaText=expression;assert.equal(R.parse([b]).drafts[0].lines[2].perPiece,true);}
+// Unnamed packaging rows become placeholders that the Ingredients quality check must flag, like unnamed ingredients.
+const blankPack=clone(book);blankPack.sheets[1].rows[11][0]=null;d=R.parse([blankPack]).drafts[0];
+assert.match(d.lines[2].name,/^Unidentified packaging — /);
+const withPack=R.candidate(state,R.plan(state,[d]).drafts,true);
+const packPlaceholder=withPack.ingredients.find(i=>i.name===d.lines[2].name);
+assert.equal(packPlaceholder.kind,'packaging');
+assert.match(M.ingredientIssues(withPack).find(q=>q.ingredientId===packPlaceholder.id).message,/identity/);
 console.log('Saved reconciliation passed: 85 sheets / 1,281 named + 2 unnamed lines and four books / 96 sheets / 1,407 lines; wholesale 5.75, HS unassigned, unnamed rows, duplicate matches, invalid quantities/labour, categories and totals notes.');

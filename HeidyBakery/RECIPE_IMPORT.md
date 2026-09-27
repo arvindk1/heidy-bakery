@@ -8,7 +8,7 @@ The recipe review displays the source file and sheet, batch yield, selling unit,
 
 ## Three-file reconciliation
 
-An independent openpyxl read of the source files was compared with the app's native XLSX reader and converter. All **85 recipe sheets and 1,281 material lines** matched for names, quantities, units, batch yield, labour effort, per-unit packaging basis, and unambiguous listed prices. Zero recipe sheets were skipped.
+An independent openpyxl read of the source files was compared with the app's native XLSX reader and converter. All **85 recipe sheets and 1,283 material lines** (1,281 named + 2 unnamed packaging rows in TBC FB Chocolate CK (2); with Cloud Chiffon Series: 96 sheets / 1,407 lines) matched for names, quantities, units, batch yield, labour effort, per-unit packaging basis, and unambiguous listed prices. Zero recipe sheets were skipped.
 
 Review findings in the source files:
 
@@ -20,3 +20,7 @@ Review findings in the source files:
 ## Validation
 
 `npm test` and `npm run test:ui` passed. The UI suite checks the two distinct import actions, preview, cancel, explicit missing-material confirmation, save, and repeat-import behavior. An isolated browser run imported all 85 sheets without writing to the live bakery library. The existing 11 golden recipe costs remained unchanged. `build.sh --local` passed native self-tests and produced version 0.3.9 build 12. This local ZIP is not a distribution package; Heidy's existing installer remains the previous version until a signed/notarized release is made.
+
+## Follow-up (Claude, 2026-09-27, branch fix/recipe-import-followups)
+
+- Unnamed source rows import as placeholders named `Unidentified ingredient — <sheet> row N` or `Unidentified packaging — <sheet> row N`, matching the existing seed placeholder for Chestnut row 11. `ingredientIssues()` previously flagged only the ingredient form; packaging placeholders (TBC FB Chocolate CK (2) rows 17–18) now also show "Confirm ingredient identity" in Ingredients.

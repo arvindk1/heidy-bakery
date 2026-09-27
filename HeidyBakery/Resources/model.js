@@ -91,7 +91,7 @@
       const missing=[];
       if(!String(i.unit||'').trim()) missing.push('purchase unit');
       if(!positive(i.size)) missing.push('package quantity');
-      if(/^(Unnamed item — source row|Unidentified ingredient —)/.test(i.name)) missing.push('ingredient identity');
+      if(/^(Unnamed item — source row|Unidentified (ingredient|packaging) —)/.test(i.name)) missing.push('ingredient identity');
       return missing.length ? [{ingredientId:i.id,name:i.name,message:'Confirm '+missing.join(', ')+'.'}] : [];
     });
   }
