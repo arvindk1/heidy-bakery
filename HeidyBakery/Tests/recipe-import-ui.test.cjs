@@ -17,7 +17,7 @@ const book={file:'Cake.xlsx',sheets:[
 ]};
 let browser;
 (async()=>{
-  let saved=fixture(),saves=0;
+  let saved=fixture(),saves=0,failSave=false;
   browser=await chromium.launch({headless:true,channel:'chrome'});
   const page=await browser.newPage({viewport:{width:1100,height:850}}),errors=[];
   page.on('pageerror',e=>errors.push(e.message));
@@ -26,9 +26,12 @@ let browser;
       let result=null;
       if(action==='load')result={state:clone(saved),seed:clone(saved),inbox:''};
       if(action==='importRecipeWorkbooks')result=[book];
-      if(action==='save'){saved=M.validate(clone(payload));saves++;result=true;}
+      if(action==='save'){
+        if(failSave){failSave=false;throw Error('Simulated disk full');}
+        saved=M.validate(clone(payload));saves++;result=true;
+      }
       return{id,result};
-    } catch(e){return{id,error:e.message};}
+    } catch(e){return{id,error:e.stderr?.toString().trim()||e.message};}
   });
   await page.addInitScript(()=>{window.webkit={messageHandlers:{native:{postMessage:m=>window.nativeCall(m).then(window.nativeReply)}}};});
   await page.goto('file://'+path.join(root,'Resources/index.html'));
@@ -55,10 +58,19 @@ let browser;
   assert.equal(saves,1);assert.equal(saved.recipes.length,1);assert.equal(saved.ingredients.length,2);
   assert.equal(saved.recipes[0].retail,6);assert.equal(saved.recipes[0].lines[1].perPiece,true);
   await page.locator('#import-recipes').click();
+  await page.locator('#dialog-body input[name=use]').check();
+  const beforeFailedSave=clone(saved);failSave=true;
+  await page.locator('#dialog-submit').click();
+  await page.locator('#dialog-error').getByText('Simulated disk full',{exact:true}).waitFor();
+  assert.deepEqual(saved,beforeFailedSave);assert.equal(saves,1);
+  await page.locator('#dialog-submit').click();
+  await page.locator('#dialog').waitFor({state:'hidden'});
+  assert.equal(saves,2);assert.equal(saved.recipes.length,1);
+  await page.locator('#import-recipes').click();
   assert.match(await page.locator('#dialog-body').innerText(),/1 already in the app/);
   assert.equal(await page.locator('#dialog-body input[name=use]').isChecked(),false);
   await page.locator('#dialog-cancel').click();
-  assert.equal(saves,1);assert.deepEqual(errors,[]);
+  assert.equal(saves,2);assert.deepEqual(errors,[]);
   await browser.close();
-  console.log('Recipe import UI passed: distinct actions, clear review, cancel, missing-master confirmation, apply, and safe repeat import.');
+  console.log('Recipe import UI passed: distinct actions, clear review, cancel, missing-master confirmation, apply, save rollback/retry, and safe repeat import.');
 })().catch(async e=>{console.error(e);if(browser)await browser.close();process.exitCode=1;});
