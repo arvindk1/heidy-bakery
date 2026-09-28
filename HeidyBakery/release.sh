@@ -14,9 +14,12 @@ PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 ROOT_DIR="$(cd "$PROJECT_DIR/.." && pwd)"
 SHIPPED="$ROOT_DIR/docs/releases/SHIPPED.txt"
 
+# --- Canonical delivery text ---
+node "$PROJECT_DIR/Scripts/generate-delivery.cjs" --check
+
 # --- Preflight ---
-git -C "$ROOT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
-  echo "release.sh requires $ROOT_DIR to be a git repository (needed to check the current branch and a clean tree)." >&2
+git -C "$ROOT_DIR" rev-parse --show-toplevel >/dev/null 2>&1 || {
+  echo 'Release requires a clean Git checkout on main. This output folder is not a Git repository; sync reviewed changes into the release repository and run make release there.' >&2
   exit 1
 }
 BRANCH="$(git -C "$ROOT_DIR" rev-parse --abbrev-ref HEAD)"
@@ -60,6 +63,7 @@ fi
 
 # --- Signed build + installer (unchanged scripts) ---
 (cd "$PROJECT_DIR" && ./build.sh --release)
+(cd "$PROJECT_DIR" && npm run test:native-smoke)
 (cd "$PROJECT_DIR" && ./build-installer.sh --release)
 
 # --- Verify the delivery artifact ---
@@ -83,7 +87,7 @@ mkdir -p "$DELIVERY_DIR"
 cp "$PKG" "$DELIVERY_DIR/"
 cp "$PKG.sha256" "$DELIVERY_DIR/"
 cp "$VERIFICATION" "$DELIVERY_DIR/"
-cp "$PROJECT_DIR/WHATSAPP-MESSAGE.txt" "$DELIVERY_DIR/"
+node "$PROJECT_DIR/Scripts/generate-delivery.cjs" --output "$DELIVERY_DIR/WHATSAPP-MESSAGE.txt"
 echo "Delivery staged: $DELIVERY_DIR"
 
 # --- Record the shipped build ---

@@ -15,18 +15,17 @@ verbatim, plus what to tell her about each release.
 6. Wait for "Installation was successful," then close the installer.
 7. Open your Applications folder and launch Heidy Bakery from there (not an old Dock icon).
 
-## What's new in 0.3.9
+## What's new in 0.3.10
 
-- Save a full backup first, before installing.
-- **Recipes → Import recipe workbooks** now reads the original Cake, Bread,
-  Cookie & Others, and Cloud Chiffon files directly — select all four
-  together.
-- About 53 recipes arrive without selling prices; review and set retail/bulk
-  prices before relying on them.
-- App-computed costs can come out higher than the spreadsheet's own totals —
-  the sheet totals skipped some rows, mostly stickers.
-- Recipes marked **HS** have an unconfirmed sales channel; their retail and
-  bulk prices stay unassigned until confirmed.
+- Save a full backup in the app before installing.
+- In Recipes, choose **Import recipe workbooks** to bring in Cake, Bread,
+  Cookie & Others, and Cloud Chiffon together. Review before saving.
+- Check missing ingredient details and selling prices. Existing saved selling
+  prices are kept when replacing recipes; HS prices remain unassigned.
+- **Export this recipe** now works when your library also contains receipts
+  for other ingredients. To bring an app export back, use Settings →
+  **Reimport an app Excel export** and review shared ingredient/settings changes.
+- Your existing recipes, receipts and saved prices stay in place during installation.
 
 ## Where the delivery files come from
 

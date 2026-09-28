@@ -6,6 +6,7 @@
     "build": "bash build.sh",
     "build:installer": "bash build-installer.sh",
     "test:installer": "bash build-installer.sh --local",
-    "test:ui": "node Tests/ui-regression.cjs && node Tests/receipt-ui.test.cjs && node Tests/receipt-products-ui.test.cjs && node Tests/saved-products-ui.test.cjs && node Tests/unit-conversion-ui.test.cjs && node Tests/receipt-modal-ui.test.cjs && node Tests/quantity-story-ui.test.cjs && node Tests/automatic-backup-ui.test.cjs && node Tests/excel-ui.test.cjs && node Tests/recipe-import-ui.test.cjs"
+    "test:ui": "node Tests/ui-regression.cjs && node Tests/receipt-ui.test.cjs && node Tests/receipt-products-ui.test.cjs && node Tests/saved-products-ui.test.cjs && node Tests/unit-conversion-ui.test.cjs && node Tests/receipt-modal-ui.test.cjs && node Tests/quantity-story-ui.test.cjs && node Tests/automatic-backup-ui.test.cjs && node Tests/excel-ui.test.cjs && node Tests/recipe-import-ui.test.cjs",
+    "test:native-smoke": "node Tests/run-native-smoke.cjs"
   }
 }

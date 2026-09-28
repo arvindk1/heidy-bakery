@@ -1,21 +1,22 @@
 Hi Heidy! Here's the Heidy Bakery Installer.pkg update.
 
-Before installing:
-- Save a full backup in the app first (Settings -> Save full backup).
-
 To install:
 1. Quit Heidy Bakery if it's open (Command + Q).
-2. Tap the Heidy Bakery Installer.pkg file above.
-3. A preview will pop up - tap Open with Installer.
+2. In WhatsApp, tap the Heidy Bakery Installer.pkg file.
+3. A preview will pop up — tap Open with Installer.
 4. Click Continue, then Install.
 5. Enter your Mac password (or use Touch ID) if asked.
 6. Wait for "Installation was successful," then close the installer.
 7. Open your Applications folder and launch Heidy Bakery from there (not an old Dock icon).
 
-What's new this time:
-- Recipes -> Import recipe workbooks now reads your original Cake, Bread, Cookie & Others, and Cloud Chiffon files directly - you can select all four at once.
-- About 53 recipes come in without selling prices - please check and set those before relying on them.
-- Some recipe costs in the app may look higher than the spreadsheet's totals - a few rows (mostly stickers) were left out of the old sheet totals.
-- Recipes marked HS need you to confirm which price channel they use before their prices are set.
+What's new in 0.3.10
 
-Let me know if anything looks off or the installer doesn't open!
+- Save a full backup in the app before installing.
+- In Recipes, choose **Import recipe workbooks** to bring in Cake, Bread,
+  Cookie & Others, and Cloud Chiffon together. Review before saving.
+- Check missing ingredient details and selling prices. Existing saved selling
+  prices are kept when replacing recipes; HS prices remain unassigned.
+- **Export this recipe** now works when your library also contains receipts
+  for other ingredients. To bring an app export back, use Settings →
+  **Reimport an app Excel export** and review shared ingredient/settings changes.
+- Your existing recipes, receipts and saved prices stay in place during installation.

@@ -6,7 +6,7 @@ The source and built app live in this Codex folder. The app requires macOS 13 or
 
 The signed, notarized `.pkg` sent to Heidy over WhatsApp is the sole way this
 app reaches her Mac — there is no auto-update, no download link, and no other
-channel. `release.sh` (from the repo root, or `make release`) runs the whole
+channel. `bash HeidyBakery/release.sh` (from a release repo root, or `make release` inside HeidyBakery) runs the whole
 pipeline below end to end and stages the delivery files in
 `deliveries/<version>-<build>/`; `DELIVERY.md` has her exact install steps and
 the WhatsApp message text to send with each release.
@@ -23,9 +23,7 @@ Verified September 9, 2026. Credentials are saved in Keychain under the exact pr
 - Installer identity: `Developer ID Installer: Arvind Kandula (7LBQ52WL9X)`
 - Team: `7LBQ52WL9X`
 - Check access: `xcrun notarytool history --keychain-profile "HeidyBakery-notary"`
-- Build: `HEIDY_SIGN_IDENTITY='Developer ID Application: Arvind Kandula (7LBQ52WL9X)' HEIDY_NOTARY_PROFILE='HeidyBakery-notary' ./build.sh --release`
-- Build the easier update installer after the app release succeeds:
-  `HEIDY_SIGN_IDENTITY='Developer ID Application: Arvind Kandula (7LBQ52WL9X)' HEIDY_INSTALLER_IDENTITY='Developer ID Installer: Arvind Kandula (7LBQ52WL9X)' HEIDY_NOTARY_PROFILE='HeidyBakery-notary' ./build-installer.sh --release`
+- Release through `make release` with `HEIDY_SIGN_IDENTITY`, `HEIDY_INSTALLER_IDENTITY` and `HEIDY_NOTARY_PROFILE` set to the identities/profile above. Do not invoke the underlying release build scripts separately.
 
 If this exact profile is unavailable, ask the owner to restore it interactively using the setup below. Never record the app-specific password in source, documentation or chat.
 
@@ -39,18 +37,23 @@ Apple references: [Developer ID](https://developer.apple.com/developer-id/) and 
 
 ## Release
 
-From this source directory, run:
+From a clean `main` Git checkout, inside HeidyBakery, run:
 
 ```bash
-HEIDY_SIGN_IDENTITY='Developer ID Application: YOUR CERTIFICATE NAME (TEAMID)' \
-HEIDY_NOTARY_PROFILE='HeidyBakery-notary' ./build.sh --release
+HEIDY_SIGN_IDENTITY='Developer ID Application: Arvind Kandula (7LBQ52WL9X)' \
+HEIDY_INSTALLER_IDENTITY='Developer ID Installer: Arvind Kandula (7LBQ52WL9X)' \
+HEIDY_NOTARY_PROFILE='HeidyBakery-notary' make release
 ```
+
+This is the sole release entry point. It runs the delivery-text check, preflight, shipped-version guard, tests, signed build, installer build, verification and staging. The scripts below are pipeline internals.
+
+Update only DELIVERY.md's What's new section for release messaging, then run `node Scripts/generate-delivery.cjs`. Its seven install steps are locked and copied verbatim. Include the generated message with the release changes before running the pipeline. SHIPPED.txt is append-only; never revise previous entries.
 
 The script checks the identity and Keychain profile before compiling. It builds both architectures, runs model/native checks against temporary records, signs with hardened runtime and a secure timestamp, submits to Apple, requires an Accepted result, and staples the ticket. It rebuilds the ZIP after stapling and verifies the extracted copy's signature, architectures, executable permissions, native self-tests, ticket and Gatekeeper approval. Only then does it publish `../Heidy Bakery Mac.zip` and its SHA-256 checksum.
 
 Apple submission results are retained in `../release-reports/`. A failed or timed-out submission produces no new distribution ZIP. If an older verified release exists, it remains the previous release; check the build's exit status and package timestamp before sharing. For a timeout, use the submission ID with `xcrun notarytool info` or `log` and the same Keychain profile to investigate.
 
-Send only the successfully verified **Heidy Bakery Mac.zip**. Ask the recipient to download/unzip directly on her Mac, move the app into Applications, then open it. The release does not include bakery databases or receipt originals.
+Keep the verified ZIP as the installer build input. Deliver only the signed, notarized installer `.pkg` over WhatsApp. The release does not include existing bakery databases or receipt originals.
 
 For routine updates, build the installer from the successfully verified release
 ZIP and send **Heidy Bakery Installer.pkg** instead. It installs the app at
@@ -101,3 +104,7 @@ HEIDY_SIGN_IDENTITY='Developer ID Application: Arvind Kandula (7LBQ52WL9X)' \
 ```
 
 The saved notarization profile remains `HeidyBakery-notary`; verification does not need to retrieve its password or submit the app again. Serper registration and external product lookup are paused; this release uses local receipt matching only.
+
+## Codex handoff integration
+
+This Codex output directory is not a Git checkout. The mirrored `release.sh` deliberately requires a clean Git repository on `main`; do not bypass that guard here. Create a reviewed release snapshot in a separate Git checkout under the Codex folder, or hand off to Claude for its mirror. Never write into devl. Preserve and append the shipped-build ledger; each release needs a higher build number. Copying source does not update the existing built app or signed installer.

@@ -127,7 +127,7 @@
         laborHours:d.laborHours,laborEffort:d.laborEffort,otherCost:previous?.otherCost || 0,
         retail:previous?previous.retail:d.retail,bulk:previous?previous.bulk:d.bulk,
         bulkMin:previous?.bulkMin ?? null,bulkPackaging:previous?.bulkPackaging ?? null,
-        bulkLaborHours:previous?.bulkLaborHours ?? null,notes:[...new Set(noteParts)].join('\n'),
+        bulkLaborHours:previous?.bulkLaborHours ?? null,notes:[...new Set(noteParts.flatMap(part=>part.split("\n")))].join('\n'),
         category:previous?.category || category(d.file),source:d.file+' · '+d.sheet,costBaseline:previous?.costBaseline ?? null,
         lines:d.lines.map(l=>({id:M.uuid(),ingredientId:master.get(itemKey(l))[0].id,quantity:l.quantity,unit:l.unit,perPiece:l.perPiece}))};
       const index=next.recipes.findIndex(r=>r.id===recipe.id);

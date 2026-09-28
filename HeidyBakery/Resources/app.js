@@ -1243,7 +1243,17 @@ async function exportExcel(recipe = null) {
   if (recipe) {
     s.recipes = [clone(recipe)];
     const ids = new Set(recipe.lines.map(l => l.ingredientId));
-    s.ingredients = s.ingredients.filter(i => ids.has(i.id));
+    // A recipe workbook contains costing inputs, not receipt/supplier-match history.
+    // Validate the full snapshot first; projection must not hide corrupt source data.
+    M.validate(s);
+    s.ingredients = s.ingredients.filter(i => ids.has(i.id)).map(i => {
+      const item = {...i, history: []};
+      delete item.receiptId;
+      return item;
+    });
+    s.receipts = [];
+    s.mappings = {};
+    delete s.products;
   }
   await busy('Creating editable workbook…', async () => {
     const p = await native('exportExcel', M.workbook(s));
