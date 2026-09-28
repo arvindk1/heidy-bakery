@@ -38,3 +38,13 @@ docs/secrets/
 
 # Local pre-pull safety snapshots — not part of the tracked history.
 _backup-pre-pull-*/
+
+# Release pipeline outputs — rebuilt by release.sh/build.sh, not tracked.
+deliveries/
+/*.pkg*
+Heidy Bakery LOCAL TEST.zip*
+HeidyBakery/output/
+HeidyBakery/work/
+release-reports/
+_superseded/
+AppIcon.iconset.zip

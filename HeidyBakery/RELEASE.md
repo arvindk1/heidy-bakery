@@ -2,6 +2,15 @@
 
 The source and built app live in this Codex folder. The app requires macOS 13 or later and includes Intel and Apple Silicon executables. User records stay in the existing Application Support location; rebuilding does not migrate or replace them.
 
+## The only delivery method
+
+The signed, notarized `.pkg` sent to Heidy over WhatsApp is the sole way this
+app reaches her Mac — there is no auto-update, no download link, and no other
+channel. `release.sh` (from the repo root, or `make release`) runs the whole
+pipeline below end to end and stages the delivery files in
+`deliveries/<version>-<build>/`; `DELIVERY.md` has her exact install steps and
+the WhatsApp message text to send with each release.
+
 ## Local development
 
 Run `./build.sh --local` (also the default). This builds `Heidy Bakery.app` and creates `../Heidy Bakery LOCAL TEST.zip`. This package is ad hoc signed, exercises hardened runtime, and is **not approved for distribution to Heidy**.

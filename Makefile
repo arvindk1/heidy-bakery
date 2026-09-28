@@ -1,4 +1,4 @@
-.PHONY: all build test selftest clean run zip seed
+.PHONY: all build test selftest clean run zip seed release release-check
 
 SEED := HeidyBakery/Resources/seed.json
 
@@ -23,6 +23,16 @@ selftest: seed
 
 build: seed
 	./HeidyBakery/build.sh
+
+# Real release: requires HEIDY_SIGN_IDENTITY, HEIDY_INSTALLER_IDENTITY and
+# HEIDY_NOTARY_PROFILE in the environment. Never falls back to the synthetic
+# seed — a release build needs Heidy's real Resources/seed.json.
+release:
+	./HeidyBakery/release.sh
+
+# Preflight + version guard + tests only; no signing, build or delivery.
+release-check:
+	./HeidyBakery/release.sh --check
 
 run:
 	open "HeidyBakery/Heidy Bakery.app"
