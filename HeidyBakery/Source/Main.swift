@@ -944,7 +944,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, WKScriptMessageHandler
         }
       case "importRecipeWorkbooks":
         let p = NSOpenPanel()
-        p.title = "Choose recipe workbooks (Cake, Bread, Cookie & Others)"
+        p.title = "Choose recipe workbooks (Cake, Bread, Cookie & Others, Cloud Chiffon)"
         p.message = "You can select more than one .xlsx file. You will review recipes before saving."
         p.canChooseDirectories = false
         p.allowsMultipleSelection = true

@@ -15,6 +15,10 @@ ROOT_DIR="$(cd "$PROJECT_DIR/.." && pwd)"
 SHIPPED="$ROOT_DIR/docs/releases/SHIPPED.txt"
 
 # --- Preflight ---
+git -C "$ROOT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1 || {
+  echo "release.sh requires $ROOT_DIR to be a git repository (needed to check the current branch and a clean tree)." >&2
+  exit 1
+}
 BRANCH="$(git -C "$ROOT_DIR" rev-parse --abbrev-ref HEAD)"
 [ "$BRANCH" = main ] || { echo "release.sh must run from main (currently on $BRANCH)." >&2; exit 1; }
 [ -z "$(git -C "$ROOT_DIR" status --porcelain --untracked-files=no)" ] || {

@@ -26,9 +26,14 @@ for (const [tab, heading] of Object.entries(expected)) {
   await until(() => document.querySelector('#main h1')?.textContent === heading, heading);
 }
 
-check(document.querySelector('#app-version')?.textContent === 'Version 0.3.8 · Build 11', 'Wrong app version');
+// Checks the version line's shape, not an exact number — an exact match goes
+// stale every release (this one still expected 0.3.8 · Build 11 after two
+// version bumps).
+const versionText = document.querySelector('#app-version')?.textContent || '';
+const versionMatch = /^Version (\d+\.\d+\.\d+) · Build (\d+)$/.exec(versionText);
+check(versionMatch, 'Wrong app version: ' + JSON.stringify(versionText));
 check(document.querySelectorAll('#app-nav [data-tab]').length === 6, 'Navigation is incomplete');
 check(!document.querySelector('#dialog')?.open, 'Unexpected dialog');
 check(document.querySelector('#save-status')?.textContent !== 'Opening your bakery…', 'App did not finish opening');
 
-return 'PASS: notarized native app launched, initialized an isolated library, opened all six screens, and reported version 0.3.8 build 11.';
+return `PASS: notarized native app launched, initialized an isolated library, opened all six screens, and reported version ${versionMatch[1]} build ${versionMatch[2]}.`;
