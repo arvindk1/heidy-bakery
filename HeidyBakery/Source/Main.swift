@@ -468,7 +468,7 @@ func readWorkbook(_ file: URL) throws -> [String: Any] {
     guard let id = wb.sheets[name], let target = rels.rels[id], !target.contains(".."),
       !target.contains("\\"),
       target.rangeOfCharacter(from: CharacterSet(charactersIn: "*?[]")) == nil
-    else { throw failure("This workbook uses an unsupported layout. Import accepts the app’s exported Excel template, not separate recipe sheets. Export a template from Settings → Excel import and export, then enter your recipes in it. Required sheet not found: \(name). No records were changed.") }
+    else { throw failure("This looks like an original recipe workbook. Use Recipes → Import recipe workbooks instead. This Settings option only reimports a workbook exported by this app. Required sheet not found: \(name). No records were changed.") }
     let path = target.hasPrefix("/") ? String(target.dropFirst()) : "xl/" + target
     result[name] = try WorkbookXML.read(entry(path), shared: shared).rows
   }
